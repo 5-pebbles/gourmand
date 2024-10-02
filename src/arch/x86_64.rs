@@ -13,6 +13,7 @@ pub(super) unsafe extern "C" fn _start() -> ! {
     );
 }
 
+// https://en.wikipedia.org/wiki/Exit_(system_call)
 pub(super) fn exit(code: usize) -> ! {
     unsafe {
         asm!(

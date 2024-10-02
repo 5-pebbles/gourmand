@@ -36,10 +36,6 @@ pub unsafe fn rust_start(stack_pointer: *const usize) -> usize {
     let argument_pointer = stack_pointer.add(1) as *mut *mut u8;
     let environment_iterator = EnvironmentIterator::new(argument_pointer.add(argument_count + 1));
 
-    environment_iterator.for_each(|e| {
-        write(1, e);
-        write(1, "\n\n");
-    });
     no_std_debug_assert!((*argument_pointer.add(argument_count)).is_null());
 
     let auxiliary_iterator = AuxiliaryIterator::from_environment_iterator(environment_iterator);
