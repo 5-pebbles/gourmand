@@ -1,7 +1,8 @@
 use crate::{
     arch::{exit, write},
     linux::{
-        auxiliary_iterator::AuxiliaryIterator, environment_iterator::EnvironmentIterator,
+        auxiliary_vector::{AuxiliaryVectorItem, AuxiliaryVectorIter},
+        environment_iterator::EnvironmentIterator,
         relocate::relocate_linker,
     },
     utils::{self, no_std_debug_assert},
@@ -38,7 +39,7 @@ pub unsafe fn rust_start(stack_pointer: *const usize) -> usize {
 
     no_std_debug_assert!((*argument_pointer.add(argument_count)).is_null());
 
-    let auxiliary_iterator = AuxiliaryIterator::from_environment_iterator(environment_iterator);
+    let auxiliary_iterator = AuxiliaryVectorIter::from_environment_iterator(environment_iterator);
 
     relocate_linker(auxiliary_iterator);
 

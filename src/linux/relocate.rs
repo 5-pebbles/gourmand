@@ -4,28 +4,28 @@ use crate::{
         header::{self, ElfHeader},
         program_header::{ElfProgramHeaderTable, PT_DYNAMIC, PT_LOAD},
     },
-    linux::auxiliary_iterator::{AuxiliaryIterator, AT_BASE, AT_ENTRY, AT_PAGE_SIZE},
+    linux::auxiliary_vector::{AuxiliaryVectorIter, AT_BASE, AT_ENTRY, AT_PAGE_SIZE},
     utils::no_std_debug_assert,
 };
 
-pub(crate) fn relocate_linker(auxiliary_iterator: AuxiliaryIterator) {
+pub(crate) fn relocate_linker(auxiliary_iterator: AuxiliaryVectorIter) {
     // TODO: This needs to be split up... real bad...
     no_std_debug_assert!(auxiliary_iterator
         .clone()
-        .any(|value| value.kind == AT_PAGE_SIZE));
+        .any(|value| value.a_type == AT_PAGE_SIZE));
     no_std_debug_assert!(auxiliary_iterator
         .clone()
-        .any(|value| value.kind == AT_BASE));
+        .any(|value| value.a_type == AT_BASE));
     no_std_debug_assert!(auxiliary_iterator
         .clone()
-        .any(|value| value.kind == AT_ENTRY));
+        .any(|value| value.a_type == AT_ENTRY));
 
     let (mut base, mut entry, mut page_size) = (0, 0, 0);
 
-    auxiliary_iterator.for_each(|value| match value.kind {
-        AT_BASE => base = value.value,
-        AT_ENTRY => entry = value.value,
-        AT_PAGE_SIZE => page_size = value.value,
+    auxiliary_iterator.for_each(|value| match value.a_type {
+        AT_BASE => base = value.a_val,
+        AT_ENTRY => entry = value.a_val,
+        AT_PAGE_SIZE => page_size = value.a_val,
         _ => (),
     });
 

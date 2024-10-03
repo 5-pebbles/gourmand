@@ -1,5 +1,3 @@
-use crate::utils::no_std_debug_assert;
-
 use super::environment_iterator::EnvironmentIterator;
 
 pub(crate) const AT_NULL: usize = 0;
@@ -9,20 +7,20 @@ pub(crate) const AT_ENTRY: usize = 9;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct AuxiliaryIteratorItem {
-    pub kind: usize,
-    pub value: usize,
+pub(crate) struct AuxiliaryVectorItem {
+    pub a_type: usize,
+    pub a_val: usize,
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct AuxiliaryIterator(*const AuxiliaryIteratorItem);
+pub(crate) struct AuxiliaryVectorIter(*const AuxiliaryVectorItem);
 
-impl AuxiliaryIterator {
-    pub(crate) fn new(auxiliary_vector_pointer: *const AuxiliaryIteratorItem) -> Self {
+impl AuxiliaryVectorIter {
+    pub(crate) fn new(auxiliary_vector_pointer: *const AuxiliaryVectorItem) -> Self {
         Self(auxiliary_vector_pointer)
     }
 
-    pub(crate) fn into_inner(self) -> *const AuxiliaryIteratorItem {
+    pub(crate) fn into_inner(self) -> *const AuxiliaryVectorItem {
         self.0
     }
 
@@ -34,17 +32,17 @@ impl AuxiliaryIterator {
                 environment_pointer = environment_pointer.add(1);
             }
 
-            Self::new(environment_pointer.add(1) as *const AuxiliaryIteratorItem)
+            Self::new(environment_pointer.add(1) as *const AuxiliaryVectorItem)
         }
     }
 }
 
-impl Iterator for AuxiliaryIterator {
-    type Item = AuxiliaryIteratorItem;
+impl Iterator for AuxiliaryVectorIter {
+    type Item = AuxiliaryVectorItem;
 
     fn next(&mut self) -> Option<Self::Item> {
         let this = unsafe { *self.0 };
-        if this.kind == AT_NULL {
+        if this.a_type == AT_NULL {
             return None;
         }
         self.0 = unsafe { self.0.add(1) };
