@@ -5,8 +5,8 @@ pub(crate) const DT_REL: usize = 17;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct DynamicArrayItem {
-    pub kind: usize,
-    pub value: usize,
+    pub d_tag: usize,
+    pub d_val: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -27,7 +27,7 @@ impl Iterator for DynamicArrayIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         let this = unsafe { *self.0 };
-        if this.kind == DT_NULL {
+        if this.d_tag == DT_NULL {
             return None;
         }
         self.0 = unsafe { self.0.add(1) };
