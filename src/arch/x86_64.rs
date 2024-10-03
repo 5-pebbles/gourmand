@@ -13,6 +13,16 @@ pub(super) unsafe extern "C" fn _start() -> ! {
     );
 }
 
+#[inline]
+pub(super) unsafe fn relocation_store(ptr: usize, value: usize) {
+    asm!(
+        "mov [{}], {}",
+        in(reg) ptr,
+        in(reg) value,
+        options(nostack, preserves_flags),
+    );
+}
+
 // https://en.wikipedia.org/wiki/Exit_(system_call)
 pub(super) fn exit(code: usize) -> ! {
     unsafe {
