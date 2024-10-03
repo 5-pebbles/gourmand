@@ -1,6 +1,6 @@
 use crate::{
     elf::{
-        dynamic_array::{DynamicArrayItem, DynamicArrayIter, DT_RELA, DT_TEXTREL},
+        dynamic_array::{DynamicArrayItem, DynamicArrayIter, DT_RELA, DT_RELASZ, DT_TEXTREL},
         header::{self, ElfHeader},
         program_header::{ElfProgramHeaderTable, PT_DYNAMIC, PT_LOAD},
     },
@@ -51,5 +51,5 @@ pub(crate) fn relocate_linker(auxiliary_iterator: AuxiliaryIterator) {
 
     no_std_debug_assert!(dynamic_array.clone().any(|i| i.d_tag == DT_RELA));
     // TODO: How do you handle these cases?
-    no_std_debug_assert!(!dynamic_array.clone().any(|i| i.d_tag == DT_TEXTREL))
+    no_std_debug_assert!(!dynamic_array.clone().any(|i| i.d_tag == DT_TEXTREL));
 }
