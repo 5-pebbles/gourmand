@@ -82,7 +82,7 @@ pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
     );
     relocate_linker(program_header_table, load_bias);
 
-    initialize_tls(program_header_table);
+    initialize_tls(program_header_table, load_bias);
 
     exit(0)
 }

@@ -2,6 +2,7 @@ use super::header_table::ElfHeaderTable;
 
 pub(crate) const PT_LOAD: u32 = 1;
 pub(crate) const PT_DYNAMIC: u32 = 2;
+pub(crate) const PT_TLS: u32 = 7;
 
 pub(crate) type ElfProgramHeaderTable = ElfHeaderTable<ElfProgramHeader>;
 
