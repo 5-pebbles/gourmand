@@ -2,6 +2,31 @@ use core::{ffi::c_void, ptr::null_mut};
 
 use crate::elf::program_header::{ElfProgramHeader, PT_TLS};
 
+#[derive(Debug)]
+pub enum LibcLocaleMap {}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct LibcLocaleStruct {
+    pub cat: [*const LibcLocaleMap; 6usize],
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct LibcGlobals {
+    pub can_do_threads: i32,
+    pub threaded: i32,
+    pub secure: i32,
+    pub threads_minus_1: i32,
+    pub auxv: *mut usize,
+    pub tls_head: *mut TlsModule,
+    pub tls_size: usize,
+    pub tls_align: usize,
+    pub tls_cnt: usize,
+    pub page_size: usize,
+    pub global_locale: LibcLocaleStruct,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TlsModule {
