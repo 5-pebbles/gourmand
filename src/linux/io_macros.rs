@@ -17,18 +17,20 @@ pub(crate) use underline;
 
 // Printing
 macro_rules! syscall_print {
-    ($message:expr $(,)?) => {
-        $crate::arch::write(1, $message);
+    ($($message:expr),+ $(,)?) => {
+        $(
+            $crate::arch::write(1, $message);
+        )+
     };
 }
 
 pub(crate) use syscall_print;
 
 macro_rules! syscall_debug_print {
-    ($message:expr $(,)?) => {
+    ($($message:expr),+ $(,)?) => {
         #[cfg(debug_assertions)]
         {
-            $crate::linux::io_macros::syscall_print!($message);
+            $crate::linux::io_macros::syscall_print!($($message),+);
         }
     };
 }
@@ -36,8 +38,10 @@ macro_rules! syscall_debug_print {
 pub(crate) use syscall_debug_print;
 
 macro_rules! syscall_println {
-    ($message:expr $(,)?) => {
-        $crate::arch::write(1, $message);
+    ($($message:expr),+ $(,)?) => {
+        $(
+            $crate::arch::write(1, $message);
+        )+
         $crate::arch::write(1, "\n");
     };
 }
@@ -45,10 +49,10 @@ macro_rules! syscall_println {
 pub(crate) use syscall_println;
 
 macro_rules! syscall_debug_println {
-    ($message:expr $(,)?) => {
+    ($($message:expr),+ $(,)?) => {
         #[cfg(debug_assertions)]
         {
-            $crate::linux::io_macros::syscall_println!($message);
+            $crate::linux::io_macros::syscall_println!($($message),+);
         }
     };
 }
