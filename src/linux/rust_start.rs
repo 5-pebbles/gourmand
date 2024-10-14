@@ -1,7 +1,7 @@
-use core::slice;
+use core::{ffi::c_void, ptr::null_mut, slice};
 
 use crate::{
-    arch::exit,
+    arch::{exit, relocation_load, write},
     elf::{
         header::{ElfHeader, ET_DYN},
         program_header::{ElfProgramHeader, ElfProgramHeaderTable, PT_LOAD},
@@ -10,71 +10,41 @@ use crate::{
         auxiliary_vector::{AuxiliaryVectorIter, AT_BASE, AT_ENTRY, AT_PAGE_SIZE},
         environment_variables::EnvironmentIter,
         relocate::relocate_linker,
+        io_macros::*,
         thread_local_storage::initialize_tls,
     },
-    utils::no_std_debug_assert,
 };
 
 pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
-    // Stack layout:
-    // |---------------------|
-    // | arg_count           |
-    // |---------------------|
-    // | arg_values...       |
-    // |---------------------|
-    // | null                |
-    // |---------------------|
-    // | env_pointers...     |
-    // |---------------------|
-    // | null                |
-    // |---------------------|
-    // | null                |
-    // |---------------------|
-    // | auxiliary_vector... |
-    // |---------------------|
-    // | null                |
-    // |---------------------|
-    // | ...                 |
-    // |---------------------|
     // Check that `stack_pointer` is where we expect it to be.
-    no_std_debug_assert!(stack_pointer != core::ptr::null_mut());
-    no_std_debug_assert!(stack_pointer.addr() & 0b1111 == 0);
+    syscall_debug_assert!(stack_pointer != core::ptr::null_mut());
+    syscall_debug_assert!(stack_pointer.addr() & 0b1111 == 0);
 
     let argument_count = *stack_pointer as usize;
     let argument_pointer = stack_pointer.add(1) as *mut *mut u8;
-    no_std_debug_assert!((*argument_pointer.add(argument_count)).is_null());
+    syscall_debug_assert!((*argument_pointer.add(argument_count)).is_null());
 
-    let environment_iterator = EnvironmentIter::from_stack_pointer(stack_pointer);
+    let environment_iter = EnvironmentIter::from_stack_pointer(stack_pointer);
+    let auxiliary_vector_iter = AuxiliaryVectorIter::from_environment_iter(environment_iter);
 
-    let auxiliary_vector = AuxiliaryVectorIter::from_environment_iterator(environment_iterator);
-    no_std_debug_assert!(auxiliary_vector
-        .clone()
-        .any(|value| value.a_type == AT_PAGE_SIZE));
-    no_std_debug_assert!(auxiliary_vector
-        .clone()
-        .any(|value| value.a_type == AT_BASE));
-    no_std_debug_assert!(auxiliary_vector
-        .clone()
-        .any(|value| value.a_type == AT_ENTRY));
-
-    let (mut base, mut entry, mut page_size) = (0, 0, 0);
-    auxiliary_vector.for_each(|value| match value.a_type {
+    let (mut base, mut entry, mut page_size) = (null_mut(), null_mut(), 0);
+    auxiliary_vector_iter.for_each(|value| match value.a_type {
         AT_BASE => base = value.a_val,
         AT_ENTRY => entry = value.a_val,
-        AT_PAGE_SIZE => page_size = value.a_val,
+        AT_PAGE_SIZE => page_size = value.a_val.addr(),
         _ => (),
     });
 
-    let header = unsafe { &*(base as *const ElfHeader) };
-    no_std_debug_assert!(header.e_type == ET_DYN);
+    if base == null_mut() {
+        // This means we are a static pie (position-independent-executable) -  probably called as ./libgourmand.so
+        syscall_println!(concat!(env!("CARGO_PKG_DESCRIPTION"), "\n"));
+        syscall_println!(bold!(underline!("Usage:"), " gourmand"), " <BINARY_PATH>\n");
+        exit(0);
+    }
 
-    let program_header_table = ElfProgramHeaderTable::new(base, header.e_phoff, header.e_phnum);
-    let load_bias = base
-        - program_header_table
-            .iter()
-            .find(|f| f.p_type == PT_LOAD)
-            .unwrap()
-            .p_vaddr;
+    let header = unsafe { &*(base as *const ElfHeader) };
+    syscall_debug_assert!(header.e_type == ET_DYN);
+    syscall_debug_assert!(header.e_phentsize == size_of::<ElfProgramHeader>() as u16);
 
     let program_header_table = slice::from_raw_parts(
         (base + header.e_phoff) as *const ElfProgramHeader,
