@@ -8,7 +8,7 @@ use crate::{
     },
     linux::{
         auxiliary_vector::{AuxiliaryVectorIter, AT_BASE, AT_ENTRY, AT_PAGE_SIZE},
-        environment_iterator::EnvironmentIterator,
+        environment_variables::EnvironmentIter,
         relocate::relocate_linker,
         thread_local_storage::initialize_tls,
     },
@@ -44,7 +44,7 @@ pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
     let argument_pointer = stack_pointer.add(1) as *mut *mut u8;
     no_std_debug_assert!((*argument_pointer.add(argument_count)).is_null());
 
-    let environment_iterator = EnvironmentIterator::new(argument_pointer.add(argument_count + 1));
+    let environment_iterator = EnvironmentIter::from_stack_pointer(stack_pointer);
 
     let auxiliary_vector = AuxiliaryVectorIter::from_environment_iterator(environment_iterator);
     no_std_debug_assert!(auxiliary_vector

@@ -1,4 +1,4 @@
-use super::environment_iterator::EnvironmentIterator;
+use super::environment_variables::EnvironmentIter;
 
 pub(crate) const AT_NULL: usize = 0;
 pub(crate) const AT_PAGE_SIZE: usize = 6;
