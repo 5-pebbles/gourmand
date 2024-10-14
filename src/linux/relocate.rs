@@ -7,10 +7,11 @@ use crate::{
         program_header::{ElfProgramHeader, PT_DYNAMIC},
         relocate::{ElfRela, R_RELATIVE},
     },
-    utils::no_std_debug_assert,
+    linux::io_macros::*,
 };
 
 pub(crate) fn relocate_linker(program_header_table: &[ElfProgramHeader], load_bias: usize) {
+    syscall_debug_println!("gourmand relocating self...");
     let dynamic_header = program_header_table
         .into_iter()
         .find(|h| h.p_type == PT_DYNAMIC)

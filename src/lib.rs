@@ -8,7 +8,6 @@ mod arch;
 
 mod elf;
 mod linux;
-mod utils;
 
 #[cfg(not(test))]
 #[panic_handler]

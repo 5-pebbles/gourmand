@@ -1,6 +1,6 @@
 use core::{slice, str};
 
-use crate::utils::no_std_debug_assert;
+use crate::linux::io_macros::*;
 
 /// An iterator over a null-terminated list of pointers to embedded-null-byte-terminated strings representing environment variables.
 ///
@@ -25,8 +25,8 @@ impl EnvironmentIter {
     pub(crate) fn new(environment_pointer: *mut *mut u8) -> Self {
         unsafe {
             // Ensure we are below the argument slice (or at least something null) and 16-byte aligned.
-            no_std_debug_assert!(environment_pointer.addr() & 0b1111 == 0);
-            no_std_debug_assert!((*environment_pointer.sub(1)).is_null());
+            syscall_debug_assert!(environment_pointer.addr() & 0b1111 == 0);
+            syscall_debug_assert!((*environment_pointer.sub(1)).is_null());
         };
 
         Self(environment_pointer)
@@ -35,13 +35,13 @@ impl EnvironmentIter {
     /// Calculates the offset and initializes a new `EnvironmentIter` from a 16-byte aligned `*const usize` stack pointer.
     pub(crate) fn from_stack_pointer(stack_pointer: *const usize) -> Self {
         // Ensure that `stack_pointer` is not null and 16-byte aligned.
-        no_std_debug_assert!(stack_pointer != core::ptr::null_mut());
-        no_std_debug_assert!(stack_pointer.addr() & 0b1111 == 0);
+        syscall_debug_assert!(stack_pointer != core::ptr::null_mut());
+        syscall_debug_assert!(stack_pointer.addr() & 0b1111 == 0);
 
         unsafe {
             let argument_count = *stack_pointer as usize;
             let argument_pointer = stack_pointer.add(1) as *mut *mut u8;
-            no_std_debug_assert!((*argument_pointer.add(argument_count)).is_null());
+            syscall_debug_assert!((*argument_pointer.add(argument_count)).is_null());
 
             Self(argument_pointer.add(argument_count + 1))
         }
@@ -76,7 +76,7 @@ impl Iterator for EnvironmentIter {
             })?;
 
             // Ensure the variable is not malformed.
-            no_std_debug_assert!(split_at.is_some());
+            syscall_debug_assert!(split_at.is_some());
             let split_at = split_at.unwrap();
 
             let name_slice = slice::from_raw_parts(string_pointer, split_at);
