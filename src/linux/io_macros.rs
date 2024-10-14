@@ -1,3 +1,21 @@
+// Styling
+macro_rules! bold {
+    ($e:expr) => {
+        concat!("\x1B[1m", $e, "\x1B[22m")
+    };
+}
+
+pub(crate) use bold;
+
+macro_rules! underline {
+    ($e:expr) => {
+        concat!("\x1B[4m", $e, "\x1B[24m")
+    };
+}
+
+pub(crate) use underline;
+
+// Printing
 macro_rules! syscall_print {
     ($message:expr $(,)?) => {
         $crate::arch::write(1, $message);
