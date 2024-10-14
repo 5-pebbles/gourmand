@@ -1,15 +1,15 @@
 // Styling
 macro_rules! bold {
-    ($e:expr) => {
-        concat!("\x1B[1m", $e, "\x1B[22m")
+    ($($e:expr),+) => {
+        concat!("\x1B[1m", $($e),+, "\x1B[22m")
     };
 }
 
 pub(crate) use bold;
 
 macro_rules! underline {
-    ($e:expr) => {
-        concat!("\x1B[4m", $e, "\x1B[24m")
+    ($($e:expr),+) => {
+        concat!("\x1B[4m", $($e),+, "\x1B[24m")
     };
 }
 
