@@ -16,6 +16,8 @@ use crate::linux::io_macros::*;
 /// |---------------------|
 /// | env_pointers...     |
 /// |---------------------|
+/// | ...                 |
+/// |---------------------|
 /// ```
 #[derive(Clone, Copy)]
 pub(crate) struct EnvironmentIter(*mut *mut u8);

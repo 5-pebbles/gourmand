@@ -1,3 +1,5 @@
+use core::ffi::c_void;
+
 use super::environment_variables::EnvironmentIter;
 
 pub(crate) const AT_NULL: usize = 0;
@@ -5,26 +7,50 @@ pub(crate) const AT_PAGE_SIZE: usize = 6;
 pub(crate) const AT_BASE: usize = 7;
 pub(crate) const AT_ENTRY: usize = 9;
 
+/// An item in the auxiliary vector.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct AuxiliaryVectorItem {
     pub a_type: usize,
-    pub a_val: usize,
+    pub a_val: *mut c_void,
 }
 
+/// An iterator over a `AT_NULL` terminated list of auxiliary vector items.
+///
+/// The inital pointer can be found two null-bytes after the end of the environmant pointers:
+///
+/// ```no_run
+/// |---------------------|
+/// | arg_count           |
+/// |---------------------|
+/// | arg_values...       |
+/// |---------------------|
+/// | null                |
+/// |---------------------|
+/// | env_pointers...     |
+/// |---------------------|
+/// | null                |
+/// |---------------------|
+/// | null                |
+/// |---------------------|
+/// | auxiliary_vector... |
+/// |---------------------|
+/// | null                |
+/// |---------------------|
+/// | ...                 |
+/// |---------------------|
+/// ```
 #[derive(Clone, Copy)]
 pub(crate) struct AuxiliaryVectorIter(*const AuxiliaryVectorItem);
 
 impl AuxiliaryVectorIter {
+    /// Initializes a new `AuxiliaryVectorIter` from a 16-byte aligned and pre-offset `*const AuxiliaryVectorItem` pointer.
     pub(crate) fn new(auxiliary_vector_pointer: *const AuxiliaryVectorItem) -> Self {
         Self(auxiliary_vector_pointer)
     }
 
-    pub(crate) fn into_inner(self) -> *const AuxiliaryVectorItem {
-        self.0
-    }
-
-    pub(crate) fn from_environment_iterator(environment_iterator: EnvironmentIterator) -> Self {
+    /// Calculates and initializes a new `AuxiliaryVectorIter` from an `EnvironmentIter`.
+    pub(crate) fn from_environment_iter(environment_iterator: EnvironmentIter) -> Self {
         let mut environment_pointer = environment_iterator.into_inner();
 
         unsafe {
@@ -35,17 +61,27 @@ impl AuxiliaryVectorIter {
             Self::new(environment_pointer.add(1) as *const AuxiliaryVectorItem)
         }
     }
+
+    /// Extracts the inner pointer to the next item consuming the `AuxiliaryVectorItem`.
+    pub(crate) fn into_inner(self) -> *const AuxiliaryVectorItem {
+        self.0
+    }
 }
 
 impl Iterator for AuxiliaryVectorIter {
     type Item = AuxiliaryVectorItem;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let this = unsafe { *self.0 };
-        if this.a_type == AT_NULL {
+        let item_pointer = unsafe { *self.0 };
+
+        // If we are at the end of the list, return `None` and don't progress.
+        if item_pointer.a_type == AT_NULL {
             return None;
         }
+
+        // Advance to the next item
         self.0 = unsafe { self.0.add(1) };
-        Some(this)
+
+        Some(item_pointer)
     }
 }
