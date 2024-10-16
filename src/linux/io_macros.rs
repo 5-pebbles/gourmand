@@ -67,7 +67,7 @@ macro_rules! syscall_assert {
             $(
                 $crate::arch::write(2, "`");
                 $crate::arch::write(2, $message);
-                $crate::arch::write(2, "`");
+                $crate::arch::write(2, "` ");
             )?
 
             $crate::arch::write(2, concat!(

@@ -62,7 +62,7 @@ impl AuxiliaryVectorIter {
         }
     }
 
-    /// Extracts the inner pointer to the next item consuming the `AuxiliaryVectorItem`.
+    /// Extracts the inner pointer to the next item consuming the `AuxiliaryVectorIter`.
     pub(crate) fn into_inner(self) -> *const AuxiliaryVectorItem {
         self.0
     }
@@ -72,16 +72,16 @@ impl Iterator for AuxiliaryVectorIter {
     type Item = AuxiliaryVectorItem;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item_pointer = unsafe { *self.0 };
+        let item = unsafe { *self.0 };
 
         // If we are at the end of the list, return `None` and don't progress.
-        if item_pointer.a_type == AT_NULL {
+        if item.a_type == AT_NULL {
             return None;
         }
 
         // Advance to the next item
         self.0 = unsafe { self.0.add(1) };
 
-        Some(item_pointer)
+        Some(item)
     }
 }

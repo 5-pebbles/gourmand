@@ -39,6 +39,7 @@ pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
         // This means we are a static pie (position-independent-executable) -  probably called as ./libgourmand.so
         syscall_println!(concat!(env!("CARGO_PKG_DESCRIPTION"), "\n"));
         syscall_println!(bold!(underline!("Usage:"), " gourmand"), " <BINARY_PATH>\n");
+        syscall_println!("This doesn't work yet");
         exit(0);
     }
 
