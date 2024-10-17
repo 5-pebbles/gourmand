@@ -127,3 +127,55 @@ The truth is you are only going to use that struct 3 or so times; why not just w
 The same goes for naming; is `AuxiliaryVector` really any more helpful than `auxv`? Many of these things you can only find in pdfs from the 90s; if you change the name to something more descriptive, you run the risk of no one being able to understand you.
 
 Either way, what is a more descriptive name? It's just an assortment of possibly useful stuff passed to the linker by the Linux kernel... You are going to have to look it all up anyway.
+
+### Anyone who thinks AI is going to take over the world has not had it insist that the reason your code is not working on a 64-bit arch is because you are using a usize, not a u64... (>ლ)
+> 17/10/2024
+
+Any way, I fixed that issue, but now I have a new one... And it's showing me why this type of code is still written in C:
+
+- **High-level Rust:** If it compiles, it works (most of the time).
+- **C:** Your code does what you tell it to... even if you are stupid.
+- **Low-level Rust:** Just because your code compiles and is safe doesn't mean it works... Also, the compiler won't do what you want.
+
+After another half hour I changed this code:
+
+```rs
+dynamic_array_iter.for_each(|i| match i.d_tag {
+    DT_RELA => rela_pointer = unsafe { base.byte_add(i.d_un.d_ptr.addr()) } as *const Rela,
+    DT_RELASZ => {
+        rela_count = unsafe { i.d_un.d_val } / core::mem::size_of::<Rela>();
+    }
+    #[cfg(debug_assertions)]
+    DT_RELAENT => syscall_assert!(unsafe { i.d_un.d_val } as usize == size_of::<Rela>()),
+    // other stuff we may need:
+    DT_PLTGOT => global_offset_table = unsafe { base.byte_add(i.d_un.d_ptr.addr()) },
+    DT_SYMTAB => symbol_table = unsafe { base.byte_add(i.d_un.d_ptr.addr()) },
+    #[cfg(debug_assertions)]
+    DT_SYMENT => syscall_assert!(unsafe { i.d_un.d_val } as usize == size_of::<Symbol>()),
+    _ => (),
+});
+```
+
+To this:
+
+```rs
+for i in dynamic_array_iter {
+    match i.d_tag {
+        DT_RELA => rela_pointer = unsafe { base.byte_add(i.d_un.d_ptr.addr()) } as *const Rela,
+        DT_RELASZ => {
+            rela_count = unsafe { i.d_un.d_val } / core::mem::size_of::<Rela>();
+        }
+        #[cfg(debug_assertions)]
+        DT_RELAENT => syscall_assert!(unsafe { i.d_un.d_val } as usize == size_of::<Rela>()),
+        // other stuff we may need:
+        DT_PLTGOT => global_offset_table = unsafe { base.byte_add(i.d_un.d_ptr.addr()) },
+        DT_SYMTAB => symbol_table = unsafe { base.byte_add(i.d_un.d_ptr.addr()) },
+        #[cfg(debug_assertions)]
+        DT_SYMENT => syscall_assert!(unsafe { i.d_un.d_val } as usize == size_of::<Symbol>()),
+        _ => (),
+    }
+}
+```
+
+And now it all works fine... I don't know if that just changed the layout or if closures aren't safe.
+If it's closures then we might have some issues because I use a lot of them!
