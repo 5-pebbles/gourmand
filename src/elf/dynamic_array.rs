@@ -1,10 +1,16 @@
 use core::ffi::c_void;
 
 pub(crate) const DT_NULL: usize = 0;
+pub(crate) const DT_NEEDED: usize = 1;
+pub(crate) const DT_PLTRELSZ: usize = 2;
 pub(crate) const DT_PLTGOT: usize = 3;
+pub(crate) const DT_HASH: usize = 4;
+pub(crate) const DT_STRTAB: usize = 5;
+pub(crate) const DT_SYMTAB: usize = 6;
 pub(crate) const DT_RELA: usize = 7;
 pub(crate) const DT_RELASZ: usize = 8;
 pub(crate) const DT_RELAENT: usize = 9;
+pub(crate) const DT_SYMENT: usize = 11;
 pub(crate) const DT_INIT: usize = 12;
 pub(crate) const DT_FINI: usize = 13;
 pub(crate) const DT_REL: usize = 17;

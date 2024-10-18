@@ -1,15 +1,15 @@
-use core::{ffi::c_void, ptr::null_mut, slice};
+use core::{arch::asm, ffi::c_void, ptr::null_mut, slice};
 
 use crate::{
-    arch::{exit, relocation_load, write},
+    arch::{exit, relocate},
     elf::{
+        dynamic_array::{DynamicArrayItem, DynamicArrayIter},
         header::{ElfHeader, ET_DYN},
-        program_header::{ElfProgramHeader, ElfProgramHeaderTable, PT_LOAD},
+        program_header::{ProgramHeader, PT_DYNAMIC},
     },
     linux::{
         auxiliary_vector::{AuxiliaryVectorIter, AT_BASE, AT_ENTRY, AT_PAGE_SIZE},
         environment_variables::EnvironmentIter,
-        relocate::relocate_linker,
         io_macros::*,
         thread_local_storage::initialize_tls,
     },
@@ -45,15 +45,39 @@ pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
 
     let header = unsafe { &*(base as *const ElfHeader) };
     syscall_debug_assert!(header.e_type == ET_DYN);
-    syscall_debug_assert!(header.e_phentsize == size_of::<ElfProgramHeader>() as u16);
+    syscall_debug_assert!(header.e_phentsize == size_of::<ProgramHeader>() as u16);
 
     let program_header_table = slice::from_raw_parts(
-        (base + header.e_phoff) as *const ElfProgramHeader,
+        base.byte_add(header.e_phoff) as *const ProgramHeader,
         header.e_phnum as usize,
     );
-    relocate_linker(program_header_table, load_bias);
 
-    initialize_tls(program_header_table, load_bias);
+    let dynamic_header = program_header_table
+        .into_iter()
+        .find(|h| h.p_type == PT_DYNAMIC)
+        .unwrap();
 
-    exit(0)
+    #[cfg(debug_assertions)]
+    {
+        let addr: *mut c_void;
+        unsafe {
+            asm!(
+                "lea {}, [rip + _DYNAMIC]",
+                out(reg) addr
+            );
+        }
+        syscall_debug_assert!(addr == base.byte_add(dynamic_header.p_vaddr))
+    }
+
+    let dynamic_array = DynamicArrayIter::new(
+        unsafe { base.byte_add(dynamic_header.p_vaddr) } as *const DynamicArrayItem
+    );
+
+    relocate(base, dynamic_array);
+
+    syscall_debug_assert!(page_size.is_power_of_two());
+    syscall_debug_assert!(base.addr() & (page_size - 1) == 0);
+
+    // TODO: init got
+    exit(0);
 }

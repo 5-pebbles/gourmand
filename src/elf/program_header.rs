@@ -1,14 +1,10 @@
-use super::header_table::ElfHeaderTable;
-
 pub(crate) const PT_LOAD: u32 = 1;
 pub(crate) const PT_DYNAMIC: u32 = 2;
 pub(crate) const PT_TLS: u32 = 7;
 
-pub(crate) type ElfProgramHeaderTable = ElfHeaderTable<ElfProgramHeader>;
-
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq)]
-pub(crate) struct ElfProgramHeader {
+pub(crate) struct ProgramHeader {
     pub p_type: u32,
     #[cfg(target_pointer_width = "64")]
     pub p_flags: u32,
