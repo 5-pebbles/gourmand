@@ -18,9 +18,11 @@ pub(crate) use underline;
 // Printing
 macro_rules! syscall_print {
     ($($message:expr),+ $(,)?) => {
-        $(
-            $crate::arch::write(1, $message);
-        )+
+        {
+            $(
+                $crate::arch::write(1, $message);
+            )+
+        }
     };
 }
 
@@ -39,10 +41,12 @@ pub(crate) use syscall_debug_print;
 
 macro_rules! syscall_println {
     ($($message:expr),+ $(,)?) => {
-        $(
-            $crate::arch::write(1, $message);
-        )+
-        $crate::arch::write(1, "\n");
+        {
+            $(
+                $crate::arch::write(1, $message);
+            )+
+            $crate::arch::write(1, "\n");
+        }
     };
 }
 
