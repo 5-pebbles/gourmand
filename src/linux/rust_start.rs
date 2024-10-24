@@ -12,6 +12,7 @@ use crate::{
         header::{ElfHeader, ET_DYN},
         program_header::{ProgramHeader, PT_DYNAMIC},
     },
+    global_allocator,
     linux::{
         auxiliary_vector::{AuxiliaryVectorIter, AT_BASE, AT_ENTRY, AT_PAGE_SIZE},
         environment_variables::EnvironmentIter,
@@ -55,6 +56,9 @@ pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
 
     syscall_debug_assert!(page_size.is_power_of_two());
     syscall_debug_assert!(base.addr() & (page_size - 1) == 0);
+
+    global_allocator::ALLOCATOR.initialize(page_size);
+    let mybox = Box::new(0);
 
     // TODO: init got
     exit(0);

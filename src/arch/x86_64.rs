@@ -116,6 +116,7 @@ pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
 }
 
 // https://en.wikipedia.org/wiki/Exit_(system_call)
+#[inline(always)]
 pub(super) fn exit(code: usize) -> ! {
     unsafe {
         asm!(
@@ -128,6 +129,7 @@ pub(super) fn exit(code: usize) -> ! {
 }
 
 // https://en.wikipedia.org/wiki/Write_(system_call)
+#[inline(always)]
 pub(super) fn write(fd: i32, s: &str) -> isize {
     let result: isize;
     unsafe {
@@ -139,5 +141,49 @@ pub(super) fn write(fd: i32, s: &str) -> isize {
             in("rdx") s.len(),
         )
     };
+    syscall_debug_assert!(result >= 0);
+    result
+}
+
+#[inline(always)]
+pub unsafe fn mmap(size: usize) -> *mut u8 {
+    // Protection flags
+    const PROT_READ: usize = 0x1;
+    const PROT_WRITE: usize = 0x2;
+    const PROT_EXEC: usize = 0x4;
+
+    // MAP flags
+    const MAP_PRIVATE: usize = 0x2;
+    const MAP_ANONYMOUS: usize = 0x20;
+
+    let mut result: isize;
+    unsafe {
+        asm!(
+            "syscall",
+            inlateout("rax") 9isize => result, // I am like 80% sure this is the right system call... :)
+            in("rdi") null_mut::<c_void>(),
+            in("rsi") size,
+            in("rdx") PROT_READ | PROT_WRITE,
+            in("r10") MAP_PRIVATE | MAP_ANONYMOUS,
+            in("r8") -1isize, // file descriptor (-1 for anonymous mapping)
+            in("r9") 0usize, // offset
+        );
+    }
+    syscall_debug_assert!(result >= 0);
+    result as *mut u8
+}
+
+#[inline(always)]
+pub unsafe fn munmap(pointer: *mut u8, size: usize) -> isize {
+    let mut result: isize;
+    unsafe {
+        asm!(
+            "syscall",
+            inlateout("rax") 11isize => result,
+            in("rdi") pointer,
+            in("rsi") size,
+        )
+    };
+    syscall_debug_assert!(result >= 0);
     result
 }
