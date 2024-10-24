@@ -1,6 +1,6 @@
 use core::{ffi::c_void, ptr::null_mut};
 
-use crate::elf::program_header::{ElfProgramHeader, PT_TLS};
+use crate::elf::program_header::{ProgramHeader, PT_TLS};
 
 #[derive(Debug)]
 pub enum LibcLocaleMap {}
@@ -55,7 +55,7 @@ impl TlsModule {
 #[used]
 pub static mut main_tls: TlsModule = TlsModule::const_default();
 
-pub(crate) fn initialize_tls(program_header: &[ElfProgramHeader], load_bias: usize) {
+pub(crate) fn initialize_tls(program_header: &[ProgramHeader], load_bias: usize) {
     let mut tls_program_header = None;
     program_header
         .into_iter()

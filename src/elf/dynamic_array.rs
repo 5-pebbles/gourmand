@@ -25,7 +25,7 @@ pub(crate) const DT_RELR: usize = 36;
 /// A union resolved by the d_tag field of the parent dynamic array item.
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union ElfDynamicArrayUnion {
+pub union DynamicArrayUnion {
     pub d_val: usize,
     pub d_ptr: *mut c_void,
 }
@@ -35,7 +35,7 @@ pub union ElfDynamicArrayUnion {
 #[derive(Clone, Copy)]
 pub(crate) struct DynamicArrayItem {
     pub d_tag: usize,
-    pub d_un: ElfDynamicArrayUnion,
+    pub d_un: DynamicArrayUnion,
 }
 
 /// An iterator over a `DT_NULL` terminated list of dynamic array items.

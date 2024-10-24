@@ -1,13 +1,6 @@
-use core::{
-    arch::asm,
-    ffi::c_void,
-    ptr::{null, null_mut},
-};
+use core::{arch::asm, ffi::c_void, ptr::null_mut};
 
-use crate::{
-    elf::{dynamic_array::*, relocate::Rela, symbol::Symbol},
-    linux::io_macros::*,
-};
+use crate::linux::{io_macros::*, shared_object::SharedObject};
 
 #[naked]
 #[no_mangle]
@@ -23,40 +16,9 @@ pub(super) unsafe extern "C" fn _start() -> ! {
 }
 
 // This function uses a lot of inline asm and architecture specific code, which is why it's in arch...
-pub(crate) unsafe fn relocate(base: *mut c_void, dynamic_array_iter: DynamicArrayIter) {
-    syscall_debug_assert!(!dynamic_array_iter.clone().any(|i| i.d_tag == DT_REL));
-    syscall_debug_assert!(!dynamic_array_iter.clone().any(|i| i.d_tag == DT_RELR));
-
+pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
     // x86_64 only uses RELAs
-    let mut rela_pointer: *const Rela = null();
-    let mut rela_count = 0;
-
-    let mut global_offset_table = null_mut();
-    let mut symbol_table_pointer = null();
-    for i in dynamic_array_iter {
-        match i.d_tag {
-            DT_RELA => rela_pointer = unsafe { base.byte_add(i.d_un.d_ptr.addr()) } as *const Rela,
-            DT_RELASZ => {
-                rela_count = unsafe { i.d_un.d_val } / core::mem::size_of::<Rela>();
-            }
-            #[cfg(debug_assertions)]
-            DT_RELAENT => syscall_assert!(unsafe { i.d_un.d_val } as usize == size_of::<Rela>()),
-            // other stuff we may need:
-            DT_PLTGOT => global_offset_table = unsafe { base.byte_add(i.d_un.d_ptr.addr()) },
-            DT_SYMTAB => {
-                symbol_table_pointer =
-                    unsafe { base.byte_add(i.d_un.d_ptr.addr()) } as *const Symbol
-            }
-            #[cfg(debug_assertions)]
-            DT_SYMENT => syscall_assert!(unsafe { i.d_un.d_val } as usize == size_of::<Symbol>()),
-            _ => (),
-        }
-    }
-    syscall_assert!(!global_offset_table.is_null());
-    syscall_assert!(!symbol_table_pointer.is_null());
-
-    let base_address = base.addr();
-    let global_offset_table_address = global_offset_table.addr();
+    let base_address = shared_object.load_bias.addr();
 
     // Variables in relocation formulae:
     // - A(rela.r_addend): This is the addend used to compute the value of the relocatable field.
@@ -113,10 +75,11 @@ pub(crate) unsafe fn relocate(base: *mut c_void, dynamic_array_iter: DynamicArra
     const R_X86_64_SIZE64: u32 = 33;
     // Yeah that's a lot of them...
 
-    for rela in (0..rela_count).map(|i| unsafe { *rela_pointer.add(i) }) {
+    for rela in shared_object.rela {
         let relocate_address = rela.r_offset.wrapping_add(base_address);
-        let symbol = &*symbol_table_pointer.add(rela.r_sym() as usize);
-        // TODO: clean this
+        let symbol = &*shared_object
+            .symbol_table_pointer
+            .add(rela.r_sym() as usize);
         match rela.r_type() {
             R_X86_64_64 => {
                 let relocate_value = symbol.st_value.wrapping_add_signed(rela.r_addend);
@@ -144,10 +107,10 @@ pub(crate) unsafe fn relocate(base: *mut c_void, dynamic_array_iter: DynamicArra
                     options(nostack, preserves_flags),
                 );
             }
-            _ => (),
-            // _ => {
-            //     syscall_assert!(false, "unsupported relocation");
-            // }
+            // _ => (),
+            _ => {
+                syscall_assert!(false, "unsupported relocation");
+            }
         }
     }
 }
