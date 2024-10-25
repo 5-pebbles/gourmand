@@ -1,4 +1,8 @@
-use core::{ffi::c_void, ptr::null, slice};
+use core::{
+    ffi::c_void,
+    ptr::{null, null_mut},
+    slice,
+};
 
 use crate::{
     elf::{
@@ -23,7 +27,7 @@ pub(crate) struct SharedObject {
     pub dynamic_array_pointer: *const DynamicArrayItem,
     pub symbol_table_pointer: *const Symbol,
     pub string_table_pointer: *const u8,
-    pub global_offset_table_pointer: *const usize,
+    pub global_offset_table_pointer: *mut usize,
 }
 
 impl SharedObject {
@@ -48,7 +52,7 @@ impl SharedObject {
         let mut rela_pointer: *const Rela = null();
         let mut rela_count = 0;
 
-        let mut global_offset_table_pointer = null();
+        let mut global_offset_table_pointer = null_mut();
         let mut symbol_table_pointer = null();
         let mut string_table_pointer = null();
         for item in DynamicArrayIter::new(dynamic_array_pointer) {
@@ -64,7 +68,7 @@ impl SharedObject {
                 // other stuff we may need:
                 DT_PLTGOT => {
                     global_offset_table_pointer =
-                        load_bias.byte_add(item.d_un.d_ptr.addr()) as *const usize
+                        load_bias.byte_add(item.d_un.d_ptr.addr()) as *mut usize
                 }
                 DT_SYMTAB => {
                     symbol_table_pointer =

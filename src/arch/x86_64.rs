@@ -28,61 +28,76 @@ pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
     // - L(??): ??
     // - P(relocate_address): This is the address of the storage unit being relocated.
     // - S(symbol.st_value): This is the value of the symbol table entry indexed at `rela.r_sym()`.
+    //   NOTE: In the ELF specification `S` is equal to (symbol.st_value + base_address) but that doesn't make any sense to me.
     // - Z(??): ??
 
     // x86_64 relocation types:
-    /// None
+    /// | None
     const R_X86_64_NONE: u32 = 0;
-    /// S + A
+    /// S + B + A | u64
     const R_X86_64_64: u32 = 1;
-    /// S + A - P
+    /// S + B + A - P | u32
     const R_X86_64_PC32: u32 = 2;
-    /// G + A
+    /// G + A | u32
     const R_X86_64_GOT32: u32 = 3;
-    /// L + A - P
+    /// L + A - P | u32
     const R_X86_64_PLT32: u32 = 4;
-    /// Copy directly from shared object.
+    /// | None
     const R_X86_64_COPY: u32 = 5;
-    /// S
+    /// S + B | u64
     const R_X86_64_GLOB_DAT: u32 = 6;
-    /// S
+    /// S + B | u64
     const R_X86_64_JUMP_SLOT: u32 = 7;
-    /// B + A
+    /// B + A | u64
     const R_X86_64_RELATIVE: u32 = 8;
-    /// G + GOT + A - P
+    /// G + GOT + A - P | u32
     const R_X86_64_GOTPCREL: u32 = 9;
-    /// S + A
+    /// S + B + A | u32
     const R_X86_64_32: u32 = 10;
-    /// S + A
+    /// S + B + A | u32
     const R_X86_64_32S: u32 = 11;
-    /// S + A
+    /// S + B + A | u16
     const R_X86_64_16: u32 = 12;
-    /// S + A - P
+    /// S + B + A - P | u16
     const R_X86_64_PC16: u32 = 13;
-    /// S + A
+    /// S + B + A | u8
     const R_X86_64_8: u32 = 14;
-    /// S + A - P
+    /// S + B + A - P | u8
     const R_X86_64_PC8: u32 = 15;
-    /// S + A - P
+    /// S + B + A - P | u64
     const R_X86_64_PC64: u32 = 24;
-    /// S + A - GOT
+    /// S + B + A - GOT | u64
     const R_X86_64_GOTOFF64: u32 = 25;
-    /// GOT + A - P
+    /// GOT + A - P | u32
     const R_X86_64_GOTPC32: u32 = 26;
-    /// Z + A
+    /// Z + A | u32
     const R_X86_64_SIZE32: u32 = 32;
-    /// Z + A
+    /// Z + A | u64
     const R_X86_64_SIZE64: u32 = 33;
-    // Yeah that's a lot of them...
+    // TODO: I have no idea how this one works:
+    /// INDIRECT (B + A) | u64
+    const R_X86_64_IRELATIVE: u32 = 37;
+    // You may notice some are missing values; those are part of the Thread-Local Storage ABI and can be found in:
+    // 1. "ELF Handling for Thread-Local Storage".
+    // 2. "Thread-Local Storage Descriptors for IA32 and AMD64/EM64T".
 
     for rela in shared_object.rela {
         let relocate_address = rela.r_offset.wrapping_add(base_address);
         let symbol = &*shared_object
             .symbol_table_pointer
             .add(rela.r_sym() as usize);
+
+        // x86_64 assembly pointer widths:
+        // byte  | 8 bits  (1 byte)
+        // word  | 16 bits (2 bytes)
+        // dword | 32 bits (4 bytes) | "double word"
+        // qword | 64 bits (8 bytes) | "quad word"
         match rela.r_type() {
             R_X86_64_64 => {
-                let relocate_value = symbol.st_value.wrapping_add_signed(rela.r_addend);
+                let relocate_value = symbol
+                    .st_value
+                    .wrapping_add(base_address)
+                    .wrapping_add_signed(rela.r_addend);
                 asm!(
                     "mov qword ptr [{}], {}",
                     in(reg) relocate_address,
@@ -91,10 +106,11 @@ pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
                 );
             }
             R_X86_64_GLOB_DAT | R_X86_64_JUMP_SLOT => {
+                let relocate_value = symbol.st_value.wrapping_add(base_address);
                 asm!(
                     "mov qword ptr [{}], {}",
                     in(reg) relocate_address,
-                    in(reg) symbol.st_value,
+                    in(reg) relocate_value,
                     options(nostack, preserves_flags),
                 )
             }

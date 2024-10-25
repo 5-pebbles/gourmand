@@ -22,6 +22,9 @@ use crate::{
     },
 };
 
+#[no_mangle]
+static mut totally_pointless_no_mangle: usize = 0;
+
 pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
     // Check that `stack_pointer` is where we expect it to be.
     syscall_debug_assert!(stack_pointer != core::ptr::null_mut());
@@ -58,8 +61,10 @@ pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
     syscall_debug_assert!(base.addr() & (page_size - 1) == 0);
 
     global_allocator::ALLOCATOR.initialize(page_size);
-    let mybox = Box::new(0);
+    // let mybox = Box::new(0);
 
     // TODO: init got
+    totally_pointless_no_mangle = 2; // This is therapeutic, so I am leaving it here...
+
     exit(0);
 }
