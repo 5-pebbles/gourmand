@@ -51,8 +51,12 @@ impl TlsModule {
     }
 }
 
-#[no_mangle]
 #[used]
+#[no_mangle]
+pub static mut __libc: LibcGlobals = LibcGlobals::const_default();
+
+#[used]
+#[no_mangle]
 pub static mut main_tls: TlsModule = TlsModule::const_default();
 
 pub(crate) fn initialize_tls(program_header: &[ProgramHeader], load_bias: usize) {
