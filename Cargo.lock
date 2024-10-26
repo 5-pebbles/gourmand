@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "gourmand"
+name = "dryadv2"
 version = "0.1.0"

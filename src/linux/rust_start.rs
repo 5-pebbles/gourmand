@@ -46,9 +46,9 @@ pub(crate) unsafe fn rust_start(stack_pointer: *const usize) -> usize {
     });
 
     if base.is_null() {
-        // This means we are a static pie (position-independent-executable) -  probably called as ./libgourmand.so
+        // This means we are a static pie (position-independent-executable) -  probably called as ./libdryadv2.so
         syscall_println!(concat!(env!("CARGO_PKG_DESCRIPTION"), "\n"));
-        syscall_println!(bold!(underline!("Usage:"), " gourmand"), " <BINARY_PATH>\n");
+        syscall_println!(bold!(underline!("Usage:"), " dryadv2"), " <BINARY_PATH>\n");
         syscall_println!("This doesn't work yet");
         exit(0);
     }
