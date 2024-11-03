@@ -1,6 +1,6 @@
 use core::{slice, str};
 
-use crate::linux::io_macros::*;
+use crate::io_macros::*;
 
 /// An iterator over a null-terminated list of pointers to embedded-null-byte-terminated strings representing environment variables.
 ///

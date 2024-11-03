@@ -20,7 +20,7 @@ macro_rules! syscall_print {
     ($($message:expr),+ $(,)?) => {
         {
             $(
-                $crate::arch::syscall::write(1, $message);
+                $crate::arch::write(1, $message);
             )+
         }
     };
@@ -32,7 +32,7 @@ macro_rules! syscall_debug_print {
     ($($message:expr),+ $(,)?) => {
         #[cfg(debug_assertions)]
         {
-            $crate::linux::io_macros::syscall_print!($($message),+);
+            $crate::io_macros::syscall_print!($($message),+);
         }
     };
 }
@@ -43,9 +43,9 @@ macro_rules! syscall_println {
     ($($message:expr),+ $(,)?) => {
         {
             $(
-                $crate::arch::syscall::write(1, $message);
+                $crate::arch::write(1, $message);
             )+
-            $crate::arch::syscall::write(1, "\n");
+            $crate::arch::write(1, "\n");
         }
     };
 }
@@ -56,7 +56,7 @@ macro_rules! syscall_debug_println {
     ($($message:expr),+ $(,)?) => {
         #[cfg(debug_assertions)]
         {
-            $crate::linux::io_macros::syscall_println!($($message),+);
+            $crate::io_macros::syscall_println!($($message),+);
         }
     };
 }
@@ -66,15 +66,15 @@ pub(crate) use syscall_debug_println;
 macro_rules! syscall_assert {
     ($condition:expr $(, $message:expr)? $(,)?) => {
         if !$condition {
-            $crate::arch::syscall::write(2, "assertion ");
+            $crate::arch::write(2, "assertion ");
 
             $(
-                $crate::arch::syscall::write(2, "`");
-                $crate::arch::syscall::write(2, $message);
-                $crate::arch::syscall::write(2, "` ");
+                $crate::arch::write(2, "`");
+                $crate::arch::write(2, $message);
+                $crate::arch::write(2, "` ");
             )?
 
-            $crate::arch::syscall::write(2, concat!(
+            $crate::arch::write(2, concat!(
                 "failed: ",
                 stringify!($condition), "\n",
                 "  --> ",
@@ -82,7 +82,7 @@ macro_rules! syscall_assert {
                 line!(), ":",
                 column!(), "\n",
             ));
-            $crate::arch::syscall::exit(101);
+            $crate::arch::exit(101);
         }
     };
 }
@@ -93,7 +93,7 @@ macro_rules! syscall_debug_assert {
     ($condition:expr $(, $message:expr)? $(,)?) => {
         #[cfg(debug_assertions)]
         {
-            $crate::linux::io_macros::syscall_assert!($condition $(, $message)?);
+            $crate::io_macros::syscall_assert!($condition $(, $message)?);
         }
     };
 }

@@ -1,15 +1,12 @@
-use core::{
-    arch::asm,
-    cmp::max,
-    ffi::c_void,
-    ops::Add,
-    ptr::{null, null_mut},
-    slice,
-};
+use std::{arch::asm, cmp::max, ffi::c_void, ptr::null_mut, slice};
 
 use crate::{
-    elf::thread_local_storage::{DynamicThreadVectorItem, ThreadControlBlock},
-    linux::{io_macros::*, shared_object::SharedObject},
+    elf::{
+        program_header::ProgramHeader, relocate::Rela, symbol::Symbol,
+        thread_local_storage::ThreadControlBlock,
+    },
+    io_macros::*,
+    syscall_assert, syscall_debug_assert,
 };
 
 #[naked]
@@ -20,15 +17,19 @@ pub(super) unsafe extern "C" fn _start() -> ! {
         "call {}",
         "mov rdx, 0",
         "jmp rax",
-        sym crate::linux::rust_start::rust_start,
+        sym crate::rust_main,
         options(noreturn)
     );
 }
 
 // This function uses a lot of inline asm and architecture specific code, which is why it's in arch...
-pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
+pub(crate) unsafe fn relocate(
+    base: *const c_void,
+    symbol_table_pointer: *const Symbol,
+    rela: &'static [Rela],
+) {
     // x86_64 only uses RELAs
-    let base_address = shared_object.load_bias.addr();
+    let base_address = base.addr();
 
     // Variables in relocation formulae:
     // - A(rela.r_addend): This is the addend used to compute the value of the relocatable field.
@@ -90,11 +91,9 @@ pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
     // You may notice some are missing values; those are part of the Thread-Local Storage ABI see "ELF Handling for Thread-Local Storage":
     const R_X86_64_DTPMOD64: u32 = 16;
 
-    for rela in shared_object.rela {
+    for rela in rela {
         let relocate_address = rela.r_offset.wrapping_add(base_address);
-        let symbol = &*shared_object
-            .symbol_table_pointer
-            .add(rela.r_sym() as usize);
+        let symbol = &(*symbol_table_pointer.add(rela.r_sym() as usize));
 
         // x86_64 assembly pointer widths:
         // byte  | 8 bits  (1 byte)
@@ -151,24 +150,11 @@ pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
     }
 }
 
-pub(crate) unsafe fn initialize_thread_local_storage(
-    shared_object: &SharedObject,
+pub(crate) unsafe fn init_thread_local_storage(
+    base: *const c_void,
+    tls_program_header: ProgramHeader,
     pseudorandom_bytes: *const [u8; 16],
 ) {
-    const fn round_up_to_boundary(address: usize, boundary: usize) -> usize {
-        (address + (boundary - 1)) & boundary.wrapping_neg()
-    }
-
-    // Allocate space for thread local storage:
-    let tls_program_header = match shared_object.tls_program_header {
-        Some(tls_program_header) => tls_program_header,
-        // TODO: I don't really know what to do here...
-        None => {
-            syscall_debug_assert!(false, "TODO");
-            return;
-        }
-    };
-
     // Thread Local Storage [before Thread Pointer]:
     //                           |----------------------------|         |---------------------|
     //                           |       TCB Alignment        |         |    ...tls-offset    |
@@ -189,19 +175,20 @@ pub(crate) unsafe fn initialize_thread_local_storage(
     //               |      |------------------------------|
     //               |----> | Dynamically−loaded TLS Block |
     //                      |------------------------------|
-    // NOTE: We store the tread id pointer after the TCB but this is not part of the ABI.
     let tcb_align = max(tls_program_header.p_align, align_of::<ThreadControlBlock>());
-    let tls_blocks_size_and_align =
-        round_up_to_boundary(tls_program_header.p_memsz, tls_program_header.p_align);
+    let tls_blocks_size_and_align = {
+        let address = tls_program_header.p_memsz;
+        let boundary = tls_program_header.p_align;
+        (address + (boundary - 1)) & boundary.wrapping_neg()
+    };
     let tcb_size = size_of::<ThreadControlBlock>();
-    let thread_id_size = size_of::<i32>();
 
     // We use system calls because the allocator itself may use TLS:
-    let required_size = tcb_align + tls_blocks_size_and_align + tcb_size + thread_id_size;
-    let tls_allocation_pointer = syscall::mmap(
+    let required_size = tcb_align + tls_blocks_size_and_align + tcb_size;
+    let tls_allocation_pointer = mmap(
         required_size,
-        syscall::PROT_READ | syscall::PROT_WRITE,
-        syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS,
+        PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS,
     );
     syscall_debug_assert!(tls_allocation_pointer.addr() % tcb_align == 0);
 
@@ -211,9 +198,7 @@ pub(crate) unsafe fn initialize_thread_local_storage(
         tls_program_header.p_filesz,
     )
     .copy_from_slice(slice::from_raw_parts(
-        shared_object
-            .load_bias
-            .byte_add(tls_program_header.p_offset) as *const u8,
+        base.byte_add(tls_program_header.p_offset) as *const u8,
         tls_program_header.p_filesz,
     ));
 
@@ -237,9 +222,6 @@ pub(crate) unsafe fn initialize_thread_local_storage(
         .as_mut_ptr()
         .cast();
 
-    let thread_pointer_register = thread_control_block_pointer as *mut c_void;
-    *(thread_pointer_register as *mut *mut c_void) = thread_pointer_register;
-
     *thread_control_block_pointer = ThreadControlBlock {
         thread_pointee: [],
         thread_pointer_register,
@@ -252,148 +234,121 @@ pub(crate) unsafe fn initialize_thread_local_storage(
         ),
     };
 
-    // let thread_id_pointer = tls_allocation_pointer
-    //     .byte_add(tcb_align + tls_blocks_size_and_align + tcb_size)
-    //     as *mut i32;
-    // *thread_id_pointer = syscall::set_thread_id_address(thread_id_pointer.cast());
-
-    syscall::set_thread_pointer(thread_pointer_register);
+    // Make the thread pointer (which is fs on X86_64) point to the TCB:
+    set_thread_pointer(thread_pointer_register);
 }
 
-pub(crate) mod syscall {
-    use core::{arch::asm, ffi::c_void, ptr::null_mut};
+#[inline(always)]
+pub(crate) fn write(fd: i32, s: &str) {
+    const WRITE: usize = 1;
 
-    use crate::linux::io_macros::*;
-
-    #[inline(always)]
-    pub(crate) fn write(fd: i32, s: &str) {
-        const WRITE: usize = 1;
-
-        let result: isize;
-        unsafe {
-            asm!(
-                "syscall",
-                inlateout("rax") WRITE => result,
-                in("rdi") fd,
-                in("rsi") s.as_ptr(),
-                in("rdx") s.len(),
-                out("rcx") _,
-                out("r11") _,
-                options(nostack)
-            )
-        };
-        syscall_debug_assert!(result >= 0);
-    }
-
-    // Protection flags:
-    pub(crate) const PROT_READ: usize = 0x1;
-    pub(crate) const PROT_WRITE: usize = 0x2;
-    pub(crate) const PROT_EXEC: usize = 0x4;
-
-    // MAP flags:
-    pub(crate) const MAP_PRIVATE: usize = 0x2;
-    pub(crate) const MAP_ANONYMOUS: usize = 0x20;
-
-    #[inline(always)]
-    pub(crate) unsafe fn mmap(size: usize, protection_flags: usize, map_flags: usize) -> *mut u8 {
-        const MMAP: usize = 9; // I am like 80% sure this is the right system call... :)
-
-        let mut result: isize;
-        unsafe {
-            asm!(
-                "syscall",
-                inlateout("rax") MMAP => result,
-                in("rdi") null_mut::<c_void>(),
-                in("rsi") size,
-                in("rdx") protection_flags,
-                in("r10") map_flags,
-                in("r8") -1isize, // file descriptor (-1 for anonymous mapping)
-                in("r9") 0usize, // offset
-                out("rcx") _,
-                out("r11") _,
-                options(nostack)
-            );
-        }
-        syscall_debug_assert!(result >= 0);
-        result as *mut u8
-    }
-
-    #[inline(always)]
-    pub(crate) unsafe fn munmap(pointer: *mut u8, size: usize) {
-        const MUNMAP: usize = 11;
-
-        let mut result: isize;
-        unsafe {
-            asm!(
-                "syscall",
-                inlateout("rax") MUNMAP => result,
-                in("rdi") pointer,
-                in("rsi") size,
-                out("rcx") _,
-                out("r11") _,
-                options(nostack)
-            )
-        };
-        syscall_debug_assert!(result >= 0);
-    }
-
-    #[inline(always)]
-    pub(crate) unsafe fn set_thread_pointer(new_pointer: *mut c_void) {
-        const ARCH_PRCTL: usize = 158;
-        const ARCH_SET_FS: usize = 4098;
-
+    let result: isize;
+    unsafe {
         asm!(
             "syscall",
-            in("rax") ARCH_PRCTL,
-            in("rdi") ARCH_SET_FS,
-            in("rsi") new_pointer,
+            inlateout("rax") WRITE => result,
+            in("rdi") fd,
+            in("rsi") s.as_ptr(),
+            in("rdx") s.len(),
+            out("rcx") _,
+            out("r11") _,
+            options(nostack)
+        )
+    };
+    syscall_debug_assert!(result >= 0);
+}
+
+// Protection flags:
+pub(crate) const PROT_READ: usize = 0x1;
+pub(crate) const PROT_WRITE: usize = 0x2;
+pub(crate) const PROT_EXEC: usize = 0x4;
+
+// MAP flags:
+pub(crate) const MAP_PRIVATE: usize = 0x2;
+pub(crate) const MAP_ANONYMOUS: usize = 0x20;
+
+#[inline(always)]
+pub(crate) unsafe fn mmap(size: usize, protection_flags: usize, map_flags: usize) -> *mut u8 {
+    const MMAP: usize = 9; // I am like 80% sure this is the right system call... :)
+
+    let mut result: isize;
+    unsafe {
+        asm!(
+            "syscall",
+            inlateout("rax") MMAP => result,
+            in("rdi") null_mut::<c_void>(),
+            in("rsi") size,
+            in("rdx") protection_flags,
+            in("r10") map_flags,
+            in("r8") -1isize, // file descriptor (-1 for anonymous mapping)
+            in("r9") 0usize, // offset
             out("rcx") _,
             out("r11") _,
             options(nostack)
         );
-        syscall_debug_assert!(*new_pointer.cast::<*const c_void>() == new_pointer);
-        syscall_debug_assert!(get_thread_pointer() == new_pointer);
     }
+    syscall_debug_assert!(result >= 0);
+    result as *mut u8
+}
 
-    #[inline(always)]
-    pub(crate) unsafe fn get_thread_pointer() -> *mut c_void {
-        let pointer;
-        asm!(
-            "mov {}, fs:0",
-            out(reg) pointer,
-            options(nostack, preserves_flags, readonly)
-        );
-        pointer
-    }
+#[inline(always)]
+pub(crate) unsafe fn munmap(pointer: *mut u8, size: usize) {
+    const MUNMAP: usize = 11;
 
-    #[inline(always)]
-    pub(crate) unsafe fn set_thread_id_address(pointer: *mut c_void) -> i32 {
-        // NOTE: This system call is infallible.
-        const SET_TID_ADDRESS: usize = 218;
-
-        let caller_thread_id: usize;
+    let mut result: isize;
+    unsafe {
         asm!(
             "syscall",
-            inlateout("rax") SET_TID_ADDRESS => caller_thread_id,
+            inlateout("rax") MUNMAP => result,
             in("rdi") pointer,
+            in("rsi") size,
             out("rcx") _,
             out("r11") _,
             options(nostack)
-        );
-        caller_thread_id as i32
-    }
+        )
+    };
+    syscall_debug_assert!(result >= 0);
+}
 
-    #[inline(always)]
-    pub(crate) fn exit(code: usize) -> ! {
-        const EXIT: usize = 60;
+#[inline(always)]
+pub(crate) unsafe fn set_thread_pointer(new_pointer: *mut c_void) {
+    const ARCH_PRCTL: usize = 158;
+    const ARCH_SET_FS: usize = 4098;
 
-        unsafe {
-            asm!(
-                "syscall",
-                in("rax") EXIT,
-                in("rdi") code,
-                options(noreturn)
-            )
-        }
+    asm!(
+        "syscall",
+        in("rax") ARCH_PRCTL,
+        in("rdi") ARCH_SET_FS,
+        in("rsi") new_pointer,
+        out("rcx") _,
+        out("r11") _,
+        options(nostack)
+    );
+    syscall_debug_assert!(*new_pointer.cast::<*const c_void>() == new_pointer);
+    syscall_debug_assert!(get_thread_pointer() == new_pointer);
+}
+
+#[inline(always)]
+pub(crate) unsafe fn get_thread_pointer() -> *mut c_void {
+    let pointer;
+    asm!(
+        "mov {}, fs:0",
+        out(reg) pointer,
+        options(nostack, preserves_flags, readonly)
+    );
+    pointer
+}
+
+#[inline(always)]
+pub(crate) fn exit(code: usize) -> ! {
+    const EXIT: usize = 60;
+
+    unsafe {
+        asm!(
+            "syscall",
+            in("rax") EXIT,
+            in("rdi") code,
+            options(noreturn)
+        )
     }
 }

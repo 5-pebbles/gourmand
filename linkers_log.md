@@ -179,3 +179,36 @@ for i in dynamic_array_iter {
 
 And now it all works fine... I don't know if that just changed the layout or if closures aren't safe.
 If it's closures then we might have some issues because I use a lot of them!
+
+### (48) days of no_std
+> 2/11/2024
+
+I finally can use the full standard library... Now I just need to actually do linking.
+The main fix was to just statically link the C runtime library; otherwise it takes too much work and runtime to handle everything.
+
+That leaves us to handle two relocation types which is easy:
+
+```rs
+R_X86_64_RELATIVE => {
+    let relocate_value = base_address.wrapping_add_signed(rela.r_addend);
+    asm!(
+        "mov qword ptr [{}], {}",
+        in(reg) relocate_address,
+        in(reg) relocate_value,
+        options(nostack, preserves_flags),
+    );
+}
+R_X86_64_IRELATIVE => {
+    let function_pointer = base_address.wrapping_add_signed(rela.r_addend) as *const ();
+    let function: extern "C" fn() -> usize = core::mem::transmute(function_pointer);
+    let relocate_value = function();
+    asm!(
+        "mov qword ptr [{}], {}",
+        in(reg) relocate_address,
+        in(reg) relocate_value,
+        options(nostack, preserves_flags),
+    );
+}
+```
+
+Anyway I need to sleep. Good night!
