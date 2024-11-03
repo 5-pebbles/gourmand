@@ -1,81 +1,87 @@
 use core::{ffi::c_void, ptr::null_mut};
+use core::{cmp::max, mem::offset_of};
 
-use crate::elf::program_header::{ProgramHeader, PT_TLS};
+use crate::{
+    elf::program_header::{ProgramHeader, PT_TLS},
+    linux::io_macros::*,
+};
 
-#[derive(Debug)]
-pub enum LibcLocaleMap {}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct LibcLocaleStruct {
-    pub cat: [*const LibcLocaleMap; 6usize],
+pub(crate) struct TLSTemplateInfo {
+    pub pointer: *mut c_void,
+    pub image_size: usize,
+    pub template_size: usize,
+    pub template_alignment
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct LibcGlobals {
-    pub can_do_threads: i32,
-    pub threaded: i32,
-    pub secure: i32,
-    pub threads_minus_1: i32,
-    pub auxv: *mut usize,
-    pub tls_head: *mut TlsModule,
-    pub tls_size: usize,
-    pub tls_align: usize,
-    pub tls_cnt: usize,
-    pub page_size: usize,
-    pub global_locale: LibcLocaleStruct,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TlsModule {
-    pub next: *mut TlsModule,
-    pub image: *mut c_void,
-    pub len: usize,
-    pub size: usize,
-    pub align: usize,
-    pub offset: usize,
-}
-
-impl TlsModule {
-    pub(crate) const fn const_default() -> Self {
-        Self {
-            next: null_mut(),
-            image: null_mut(),
-            len: 0,
-            size: 0,
-            align: 0,
-            offset: 0,
-        }
-    }
-}
-
-#[used]
-#[no_mangle]
-pub static mut __libc: LibcGlobals = LibcGlobals::const_default();
-
-#[used]
-#[no_mangle]
-pub static mut main_tls: TlsModule = TlsModule::const_default();
-
-pub(crate) fn initialize_tls(program_header: &[ProgramHeader], load_bias: usize) {
+pub(crate) fn initialize_tls(shared_object: &SharedObject) {
     let mut tls_program_header = None;
-    program_header
+    shared_object
+        .program_header
         .into_iter()
         .for_each(|header| match header.p_type {
             PT_TLS => tls_program_header = Some(header),
             _ => (),
         });
 
+    
     if let Some(header) = tls_program_header {
-        unsafe {
-            main_tls.image = (load_bias + header.p_vaddr) as *mut c_void;
-            main_tls.len = header.p_filesz;
-            main_tls.size = header.p_memsz;
-            main_tls.align = header.p_align;
-            // TODO libc global
-        }
+        header
+    } else {
+        
     }
-    // TODO
+
+    unsafe {
+        main_tls.size += main_tls
+            .size
+            .wrapping_neg()
+            .wrapping_sub(main_tls.image.addr())
+            & (main_tls.align - 1);
+
+        // Thread Local Storage [above Thread Pointer]:                 |---------------------|
+        //                                                              |    ...tls-offset    |
+        //                                                              |---------------------|
+        //                       |-> |----------------------------| <-- |    tls-offset[-2]   |
+        // |----------|          |   |   ...Static TLS Blocks     |     |---------------------|
+        // |   GENt   | <-|   |--|-> |----------------------------| <-- |    tls-offset[-1]   |
+        // |----------|   |   |  |   |      Static TLS Block      |     |---------------------|
+        // |  DTV[1]  | --|---|  |   |----------------------------| <-- | Thread Pointer (TP) |
+        // |----------|   |------|-- | Thread Control Block (TCB) |     |---------------------|
+        // |  DTV[2]  |----------|   |----------------------------|
+        // |----------|
+        // |  DTV[3]  | --------> |------------------------------|
+        // |----------|           | Dynamically−loaded TLS Block |
+        // |  DTV[4]  | --|       |------------------------------|
+        // |----------|   |
+        // |  DTV...  |   |-----> |------------------------------|
+        // |----------|           | Dynamically−loaded TLS Block |
+        //                        |------------------------------|
+        #[cfg(any(target_arch = "x86_64"))]
+        {
+            main_tls.offset = main_tls.size;
+        }
+        // Thread Local Storage [below Thread Pointer]:             |---------------------|
+        //                    |----------------------------| <----- | Thread Pointer (TP) |
+        // |----------| <---- | Dynamic Thread Vec Pointer |        |---------------------|
+        // |   GENt   |       |----------------------------|   |--- |    tls-offset[1]    |
+        // |----------|       | Thread Control Block (TCB) |   |    |---------------------|
+        // |  DTV[1]  | ----> |----------------------------| <-| |- |    tls-offset[2]    |
+        // |----------|       |    Static TLS Blocks...    |     |  |---------------------|
+        // |  DTV[2]  | ----> |----------------------------| <---|  |     tls-offset...   |
+        // |----------|                                             |---------------------|
+        // |  DTV[3]  | --------> |------------------------------|
+        // |----------|           | Dynamically−loaded TLS Block |
+        // |  DTV[4]  | --|       |------------------------------|
+        // |----------|   |
+        // |  DTV...  |   |-----> |------------------------------|
+        // |----------|           | Dynamically−loaded TLS Block |
+        //                        |------------------------------|
+        #[cfg(any())]
+        {
+            // TODO: I don't have a way of testing this, and I am not comfortable writing code that I can't test.
+            syscall_assert!(false, "TODO");
+        }
+
+        let min_tls_align = offset_of!(TlsModule, align);
+        main_tls.align = max(main_tls.align, min_tls_align);
+    }
 }

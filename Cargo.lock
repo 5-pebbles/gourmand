@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "dryadv2"
+name = "miros"
 version = "0.1.0"

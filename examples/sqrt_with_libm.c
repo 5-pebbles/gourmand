@@ -1,4 +1,4 @@
-// gcc -o ./examples/sqrt_with_libm ./examples/sqrt_with_libm.c -lm -Wl,--dynamic-linker=./target/debug/libdryadv2.so
+// gcc -o ./examples/sqrt_with_libm ./examples/sqrt_with_libm.c -lm -Wl,--dynamic-linker=./target/debug/miros
 #include<math.h>
 
 int main () {

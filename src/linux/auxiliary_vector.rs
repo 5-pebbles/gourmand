@@ -6,6 +6,7 @@ pub(crate) const AT_NULL: usize = 0;
 pub(crate) const AT_PAGE_SIZE: usize = 6;
 pub(crate) const AT_BASE: usize = 7;
 pub(crate) const AT_ENTRY: usize = 9;
+pub(crate) const AT_RANDOM: usize = 25;
 
 /// An item in the auxiliary vector.
 #[repr(C)]

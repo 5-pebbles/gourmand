@@ -11,27 +11,28 @@ use crate::{
             DT_RELASZ, DT_STRTAB, DT_SYMENT, DT_SYMTAB,
         },
         header::{ElfHeader, ET_DYN},
-        program_header::{ProgramHeader, PT_DYNAMIC},
+        program_header::{ProgramHeader, PT_DYNAMIC, PT_TLS},
         relocate::Rela,
         symbol::Symbol,
     },
     linux::io_macros::*,
 };
 
-// #[derive(Clone, Copy)]
 pub(crate) struct SharedObject {
     pub load_bias: *const c_void,
     pub header: &'static ElfHeader,
     pub rela: &'static [Rela],
     pub program_header_table: &'static [ProgramHeader],
     pub dynamic_array_pointer: *const DynamicArrayItem,
+    pub tls_program_header: Option<&'static ProgramHeader>,
     pub symbol_table_pointer: *const Symbol,
     pub string_table_pointer: *const u8,
-    pub global_offset_table_pointer: *mut usize,
+    // pub global_offset_table_pointer: *mut usize,
 }
 
 impl SharedObject {
     pub unsafe fn new(load_bias: *const c_void) -> Self {
+        syscall_debug_assert!(!load_bias.is_null());
         let header = &*(load_bias as *const ElfHeader);
         syscall_debug_assert!(header.e_type == ET_DYN);
         syscall_debug_assert!(header.e_phentsize == size_of::<ProgramHeader>() as u16);
@@ -41,13 +42,17 @@ impl SharedObject {
             header.e_phnum as usize,
         );
 
-        let dynamic_header = program_header_table
-            .into_iter()
-            .find(|h| h.p_type == PT_DYNAMIC)
-            .unwrap();
+        let (mut dynamic_header, mut tls_program_header) = (None, None);
+        for header in program_header_table {
+            match header.p_type {
+                PT_DYNAMIC => dynamic_header = Some(header),
+                PT_TLS => tls_program_header = Some(header),
+                _ => (),
+            }
+        }
 
         let dynamic_array_pointer =
-            load_bias.byte_add(dynamic_header.p_vaddr) as *const DynamicArrayItem;
+            load_bias.byte_add(dynamic_header.unwrap().p_vaddr) as *const DynamicArrayItem;
 
         let mut rela_pointer: *const Rela = null();
         let mut rela_count = 0;
@@ -84,7 +89,7 @@ impl SharedObject {
                 _ => (),
             }
         }
-        syscall_assert!(!global_offset_table_pointer.is_null());
+        syscall_assert!(global_offset_table_pointer.is_null());
         syscall_assert!(!symbol_table_pointer.is_null());
 
         let rela = slice::from_raw_parts(rela_pointer, rela_count);
@@ -94,10 +99,11 @@ impl SharedObject {
             header,
             program_header_table,
             dynamic_array_pointer,
+            tls_program_header,
             rela,
             symbol_table_pointer,
             string_table_pointer,
-            global_offset_table_pointer,
+            // global_offset_table_pointer,
         }
     }
 }

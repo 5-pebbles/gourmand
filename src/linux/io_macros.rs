@@ -20,7 +20,7 @@ macro_rules! syscall_print {
     ($($message:expr),+ $(,)?) => {
         {
             $(
-                $crate::arch::write(1, $message);
+                $crate::arch::syscall::write(1, $message);
             )+
         }
     };
@@ -43,9 +43,9 @@ macro_rules! syscall_println {
     ($($message:expr),+ $(,)?) => {
         {
             $(
-                $crate::arch::write(1, $message);
+                $crate::arch::syscall::write(1, $message);
             )+
-            $crate::arch::write(1, "\n");
+            $crate::arch::syscall::write(1, "\n");
         }
     };
 }
@@ -66,15 +66,15 @@ pub(crate) use syscall_debug_println;
 macro_rules! syscall_assert {
     ($condition:expr $(, $message:expr)? $(,)?) => {
         if !$condition {
-            $crate::arch::write(2, "assertion ");
+            $crate::arch::syscall::write(2, "assertion ");
 
             $(
-                $crate::arch::write(2, "`");
-                $crate::arch::write(2, $message);
-                $crate::arch::write(2, "` ");
+                $crate::arch::syscall::write(2, "`");
+                $crate::arch::syscall::write(2, $message);
+                $crate::arch::syscall::write(2, "` ");
             )?
 
-            $crate::arch::write(2, concat!(
+            $crate::arch::syscall::write(2, concat!(
                 "failed: ",
                 stringify!($condition), "\n",
                 "  --> ",
@@ -82,7 +82,7 @@ macro_rules! syscall_assert {
                 line!(), ":",
                 column!(), "\n",
             ));
-            $crate::arch::exit(101);
+            $crate::arch::syscall::exit(101);
         }
     };
 }

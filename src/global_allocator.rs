@@ -49,11 +49,15 @@ unsafe impl GlobalAlloc for Allocator {
         }
         let size = layout.pad_to_align().size();
         match size {
-            _ => arch::mmap(self.align_layout_to_page_size(layout).pad_to_align().size()),
+            _ => arch::syscall::mmap(
+                self.align_layout_to_page_size(layout).pad_to_align().size(),
+                arch::syscall::PROT_READ | arch::syscall::PROT_WRITE,
+                arch::syscall::MAP_PRIVATE | arch::syscall::MAP_ANONYMOUS,
+            ),
         }
     }
     unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-        arch::munmap(
+        arch::syscall::munmap(
             pointer,
             self.align_layout_to_page_size(layout).pad_to_align().size(),
         );
