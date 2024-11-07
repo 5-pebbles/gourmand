@@ -30,7 +30,10 @@ use elf::{
 };
 use io_macros::*;
 use linux::{
-    auxiliary_vector::{AuxiliaryVectorIter, AT_BASE, AT_ENTRY, AT_PAGE_SIZE, AT_RANDOM},
+    auxiliary_vector::{
+        AuxiliaryVectorIter, AT_BASE, AT_ENTRY, AT_PAGE_SIZE, AT_PHDR, AT_PHENT, AT_PHNUM,
+        AT_RANDOM,
+    },
     environment_variables::EnvironmentIter,
 };
 
@@ -50,13 +53,21 @@ pub(crate) unsafe fn rust_main(stack_pointer: *const usize) -> usize {
     // Auxilary Vector:
     let (mut base, mut entry, mut page_size) = (null(), null(), 0);
     let mut pseudorandom_bytes: *const [u8; 16] = null_mut();
-    auxiliary_vector_iter.for_each(|value| match value.a_type {
-        AT_BASE => base = value.a_val,
-        AT_ENTRY => entry = value.a_val,
-        AT_PAGE_SIZE => page_size = value.a_val.addr(),
-        AT_RANDOM => pseudorandom_bytes = value.a_val as *const [u8; 16],
-        _ => (),
-    });
+    // NOTE: The program headers in the auxiliary vector belong to the executable, not us.
+    let (mut program_header_pointer, mut program_header_count) = (null(), 0);
+    for item in auxiliary_vector_iter {
+        match item.a_type {
+            AT_BASE => base = item.a_un.a_ptr,
+            AT_ENTRY => entry = item.a_un.a_ptr,
+            AT_PAGE_SIZE => page_size = item.a_un.a_val,
+            AT_RANDOM => pseudorandom_bytes = item.a_un.a_ptr as *const [u8; 16],
+            AT_PHDR => program_header_pointer = item.a_un.a_ptr as *const ProgramHeader,
+            AT_PHNUM => program_header_count = item.a_un.a_val,
+            #[cfg(debug_assertions)]
+            AT_PHENT => syscall_assert!(item.a_un.a_val == size_of::<ProgramHeader>()),
+            _ => (),
+        }
+    }
 
     if base.is_null() {
         // This means we are a static pie (position-independent-executable) -  probably called as ./miros

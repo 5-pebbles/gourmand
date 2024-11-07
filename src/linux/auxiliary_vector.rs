@@ -3,17 +3,29 @@ use core::ffi::c_void;
 use super::environment_variables::EnvironmentIter;
 
 pub(crate) const AT_NULL: usize = 0;
+pub(crate) const AT_PHDR: usize = 3;
+pub(crate) const AT_PHENT: usize = 4;
+pub(crate) const AT_PHNUM: usize = 5;
 pub(crate) const AT_PAGE_SIZE: usize = 6;
 pub(crate) const AT_BASE: usize = 7;
 pub(crate) const AT_ENTRY: usize = 9;
 pub(crate) const AT_RANDOM: usize = 25;
+
+/// A union resolved by the a_type field of the parent auxiliary vector item.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) union AuxiliaryVectorUnion {
+    pub a_val: usize,
+    pub a_ptr: *mut c_void,
+}
 
 /// An item in the auxiliary vector.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct AuxiliaryVectorItem {
     pub a_type: usize,
-    pub a_val: *mut c_void,
+    // NOTE: I couldn't find good documentation on this field; glibc's `getauxval` returns a usize, but I think it really represents union.
+    pub a_un: AuxiliaryVectorUnion,
 }
 
 /// An iterator over a `AT_NULL` terminated list of auxiliary vector items.
