@@ -41,7 +41,7 @@ impl StringTable {
     }
 
     /// Extracts the inner pointer to the next item consuming the `StringTable`.
-    pub(crate) fn into_inner(self) -> *const u8 {
+    pub fn into_inner(self) -> *const u8 {
         self.0
     }
 }

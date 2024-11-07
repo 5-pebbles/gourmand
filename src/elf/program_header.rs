@@ -1,5 +1,6 @@
 pub(crate) const PT_LOAD: u32 = 1;
 pub(crate) const PT_DYNAMIC: u32 = 2;
+pub(crate) const PT_PHDR: u32 = 6;
 pub(crate) const PT_TLS: u32 = 7;
 
 #[repr(C)]

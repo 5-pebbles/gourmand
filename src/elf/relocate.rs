@@ -1,13 +1,3 @@
-use core::ffi::c_void;
-
-use crate::elf::symbol::Symbol;
-
-pub(crate) struct RelocationInfo {
-    pub base: *mut c_void,
-    pub symbol_table_pointer: *const Symbol,
-    pub rela: &'static [Rela],
-}
-
 /// An ELF relocation entry with an addend.
 #[repr(C)]
 #[derive(Clone, Copy)]
