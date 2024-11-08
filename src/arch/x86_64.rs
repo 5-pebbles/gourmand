@@ -1,11 +1,23 @@
-use std::{arch::asm, cmp::max, ffi::c_void, ptr::null_mut, slice};
+use core::{
+    arch::asm,
+    cmp::max,
+    ffi::c_void,
+    ptr::{null, null_mut},
+    slice,
+};
 
 use crate::{
     elf::{
-        program_header::ProgramHeader, relocate::Rela, symbol::Symbol,
+        dynamic_array::{
+            DynamicArrayIter, DT_RELA, DT_RELAENT, DT_RELASZ, DT_STRTAB, DT_SYMENT, DT_SYMTAB,
+        },
+        program_header::ProgramHeader,
+        relocate::Rela,
+        symbol::Symbol,
         thread_local_storage::ThreadControlBlock,
     },
     io_macros::*,
+    shared_object::SharedObject,
     syscall_assert, syscall_debug_assert,
 };
 
@@ -23,13 +35,8 @@ pub(super) unsafe extern "C" fn _start() -> ! {
 }
 
 // This function uses a lot of inline asm and architecture specific code, which is why it's in arch...
-pub(crate) unsafe fn relocate(
-    base: *const c_void,
-    symbol_table_pointer: *const Symbol,
-    rela: &'static [Rela],
-) {
-    // x86_64 only uses RELAs
-    let base_address = base.addr();
+pub(crate) unsafe fn relocate(shared_object: &SharedObject) {
+    let base_address = shared_object.base.addr();
 
     // Variables in relocation formulae:
     // - A(rela.r_addend): This is the addend used to compute the value of the relocatable field.
@@ -91,9 +98,9 @@ pub(crate) unsafe fn relocate(
     // You may notice some are missing values; those are part of the Thread-Local Storage ABI see "ELF Handling for Thread-Local Storage":
     const R_X86_64_DTPMOD64: u32 = 16;
 
-    for rela in rela {
+    for rela in shared_object.relocations.rela {
         let relocate_address = rela.r_offset.wrapping_add(base_address);
-        let symbol = &(*symbol_table_pointer.add(rela.r_sym() as usize));
+        let symbol = shared_object.symbol_table.get(rela.r_sym() as usize);
 
         // x86_64 assembly pointer widths:
         // byte  | 8 bits  (1 byte)
@@ -151,8 +158,7 @@ pub(crate) unsafe fn relocate(
 }
 
 pub(crate) unsafe fn init_thread_local_storage(
-    base: *const c_void,
-    tls_program_header: ProgramHeader,
+    shared_object: &SharedObject,
     pseudorandom_bytes: *const [u8; 16],
 ) {
     // Thread Local Storage [before Thread Pointer]:
@@ -175,10 +181,13 @@ pub(crate) unsafe fn init_thread_local_storage(
     //               |      |------------------------------|
     //               |----> | Dynamically−loaded TLS Block |
     //                      |------------------------------|
-    let tcb_align = max(tls_program_header.p_align, align_of::<ThreadControlBlock>());
+    let tcb_align = max(
+        shared_object.tls.program_header.p_align,
+        align_of::<ThreadControlBlock>(),
+    );
     let tls_blocks_size_and_align = {
-        let address = tls_program_header.p_memsz;
-        let boundary = tls_program_header.p_align;
+        let address = shared_object.tls.program_header.p_memsz;
+        let boundary = shared_object.tls.program_header.p_align;
         (address + (boundary - 1)) & boundary.wrapping_neg()
     };
     let tcb_size = size_of::<ThreadControlBlock>();
@@ -195,19 +204,21 @@ pub(crate) unsafe fn init_thread_local_storage(
     // Initialize the TLS data from template image:
     slice::from_raw_parts_mut(
         tls_allocation_pointer.byte_add(tcb_align),
-        tls_program_header.p_filesz,
+        shared_object.tls.program_header.p_filesz,
     )
     .copy_from_slice(slice::from_raw_parts(
-        base.byte_add(tls_program_header.p_offset) as *const u8,
-        tls_program_header.p_filesz,
+        shared_object
+            .base
+            .byte_add(shared_object.tls.program_header.p_offset) as *const u8,
+        shared_object.tls.program_header.p_filesz,
     ));
 
-    // Zero out TLS data beyond `p_filesz`
+    // Zero out TLS data beyond `p_filesz`:
     slice::from_raw_parts_mut(
         tls_allocation_pointer
             .byte_add(tcb_align)
-            .byte_add(tls_program_header.p_filesz),
-        tls_program_header.p_memsz - tls_program_header.p_filesz,
+            .byte_add(shared_object.tls.program_header.p_filesz),
+        shared_object.tls.program_header.p_memsz - shared_object.tls.program_header.p_filesz,
     )
     .fill(0);
 
@@ -234,7 +245,7 @@ pub(crate) unsafe fn init_thread_local_storage(
         ),
     };
 
-    // Make the thread pointer (which is fs on X86_64) point to the TCB:
+    // Make the thread pointer (which is fs on x86_64) point to the TCB:
     set_thread_pointer(thread_pointer_register);
 }
 
@@ -324,7 +335,7 @@ pub(crate) unsafe fn set_thread_pointer(new_pointer: *mut c_void) {
         out("r11") _,
         options(nostack)
     );
-    syscall_debug_assert!(*new_pointer.cast::<*const c_void>() == new_pointer);
+    syscall_debug_assert!(*new_pointer.cast::<*mut c_void>() == new_pointer);
     syscall_debug_assert!(get_thread_pointer() == new_pointer);
 }
 

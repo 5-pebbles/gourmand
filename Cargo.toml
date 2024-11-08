@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2021"
 description = "A modern ELF interpreter (dynamic linker/loader) written in Rust"
 
-# [lib]
-# crate-type = ["cdylib"]
-
 [profile.dev]
 panic = "abort"
 
