@@ -11,7 +11,7 @@ use core::{
 };
 use std::{collections::HashMap, fs::File, path::Path};
 
-#[cfg_attr(target_arch = "x86_64", path = "arch/x86_64.rs")]
+#[cfg_attr(target_arch = "x86_64", path = "arch/x86_64/mod.rs")]
 mod arch;
 
 mod cli;
