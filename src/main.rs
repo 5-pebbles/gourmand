@@ -19,7 +19,7 @@ mod cli;
 mod elf;
 mod io_macros;
 mod linux;
-// mod shared_object;
+mod shared_object;
 mod static_pie;
 
 use elf::program_header::ProgramHeader;
@@ -32,8 +32,8 @@ use linux::{
     environment_variables::EnvironmentIter,
     page_size,
 };
+use shared_object::SharedObject;
 use static_pie::StaticPie;
-// use shared_object::SharedObject;
 
 // This is where the magic happens, it's called by the architecture specific _start and returns the entry address when everything is set up:
 pub unsafe fn rust_main(stack_pointer: *mut usize) -> usize {
@@ -79,15 +79,20 @@ pub unsafe fn rust_main(stack_pointer: *mut usize) -> usize {
         StaticPie::from_base(base, pseudorandom_bytes)
     };
     miros.relocate_to_oven().allocate_tls_in_stomach();
+    // NOTE: We can now use the Rust standard library.
 
     syscall_debug_assert!(page_size.is_power_of_two());
     syscall_debug_assert!(base.addr() & (page_size - 1) == 0);
     page_size::set_page_size(page_size);
 
-    // NOTE: We can now use the Rust standard library.
-    // Except for `format_args`... ¯\_(ツ)_/¯ idk
+    if base == null() {
+        // TODO: Cli
+        arch::exit::exit(1);
+    }
 
-    // let shared_object = SharedObject::from_program_header_table(&program_header_table);
+    let shared_object = SharedObject::from_headers(&program_header_table, pseudorandom_bytes);
+
+    
 
     // let linked_shared_objects: HashMap<&'static str, SharedObject> = HashMap::new();
     // for library in shared_object.libraries() {
@@ -97,5 +102,5 @@ pub unsafe fn rust_main(stack_pointer: *mut usize) -> usize {
     //     }
     // }
 
-    // arch::exit(0);
+    arch::exit::exit(0);
 }
