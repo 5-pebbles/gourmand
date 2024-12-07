@@ -30,6 +30,7 @@ use linux::{
         AT_RANDOM,
     },
     environment_variables::EnvironmentIter,
+    page_size,
 };
 use static_pie::StaticPie;
 // use shared_object::SharedObject;
@@ -77,21 +78,15 @@ pub unsafe fn rust_main(stack_pointer: *mut usize) -> usize {
     } else {
         StaticPie::from_base(base, pseudorandom_bytes)
     };
-
-    // miros.relocate_to_oven().allocate_tls_in_stomach();
     miros.relocate_to_oven().allocate_tls_in_stomach();
 
-    // Relocate ourselves and initialize thread local storage:
-
-    // syscall_debug_assert!(page_size.is_power_of_two());
-    // syscall_debug_assert!(base.addr() & (page_size - 1) == 0);
-    arch::exit::exit(0);
+    syscall_debug_assert!(page_size.is_power_of_two());
+    syscall_debug_assert!(base.addr() & (page_size - 1) == 0);
+    page_size::set_page_size(page_size);
 
     // NOTE: We can now use the Rust standard library.
     // Except for `format_args`... ¯\_(ツ)_/¯ idk
 
-    // let program_header_table =
-    //     slice::from_raw_parts(program_header_pointer, program_header_count as usize);
     // let shared_object = SharedObject::from_program_header_table(&program_header_table);
 
     // let linked_shared_objects: HashMap<&'static str, SharedObject> = HashMap::new();

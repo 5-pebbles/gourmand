@@ -20,11 +20,11 @@ use crate::io_macros::*;
 /// |---------------------|
 /// ```
 #[derive(Clone, Copy)]
-pub(crate) struct EnvironmentIter(*mut *mut u8);
+pub struct EnvironmentIter(*mut *mut u8);
 
 impl EnvironmentIter {
     /// Initializes a new `EnvironmentIter` from a 16-byte aligned and pre-offset `*mut *mut u8` pointer.
-    pub(crate) fn new(environment_pointer: *mut *mut u8) -> Self {
+    pub fn new(environment_pointer: *mut *mut u8) -> Self {
         unsafe {
             // Ensure we are below the argument slice (or at least something null) and 16-byte aligned.
             syscall_debug_assert!(environment_pointer.addr() & 0b1111 == 0);
@@ -35,7 +35,7 @@ impl EnvironmentIter {
     }
 
     /// Calculates the offset and initializes a new `EnvironmentIter` from a 16-byte aligned `*const usize` stack pointer.
-    pub(crate) fn from_stack_pointer(stack_pointer: *const usize) -> Self {
+    pub fn from_stack_pointer(stack_pointer: *const usize) -> Self {
         // Ensure that `stack_pointer` is not null and 16-byte aligned.
         syscall_debug_assert!(stack_pointer != core::ptr::null_mut());
         syscall_debug_assert!(stack_pointer.addr() & 0b1111 == 0);
@@ -50,7 +50,7 @@ impl EnvironmentIter {
     }
 
     /// Extracts the inner pointer to the next item consuming the `EnvironmentIter`.
-    pub(crate) fn into_inner(self) -> *mut *mut u8 {
+    pub fn into_inner(self) -> *mut *mut u8 {
         self.0
     }
 }
