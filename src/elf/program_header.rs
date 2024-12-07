@@ -1,11 +1,11 @@
-pub(crate) const PT_LOAD: u32 = 1;
-pub(crate) const PT_DYNAMIC: u32 = 2;
-pub(crate) const PT_PHDR: u32 = 6;
-pub(crate) const PT_TLS: u32 = 7;
+pub const PT_LOAD: u32 = 1;
+pub const PT_DYNAMIC: u32 = 2;
+pub const PT_PHDR: u32 = 6;
+pub const PT_TLS: u32 = 7;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq)]
-pub(crate) struct ProgramHeader {
+pub struct ProgramHeader {
     pub p_type: u32,
     #[cfg(target_pointer_width = "64")]
     pub p_flags: u32,

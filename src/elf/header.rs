@@ -1,8 +1,8 @@
-pub(crate) const ET_DYN: u16 = 3;
+pub const ET_DYN: u16 = 3;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq)]
-pub(crate) struct ElfHeader {
+pub struct ElfHeader {
     pub e_ident: [u8; 16],
     pub e_type: u16,
     pub e_machine: u16,

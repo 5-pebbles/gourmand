@@ -2,16 +2,21 @@ use core::ffi::c_void;
 
 use crate::elf::symbol::Symbol;
 
-pub(crate) struct RelocationInfo {
-    pub base: *mut c_void,
-    pub symbol_table_pointer: *const Symbol,
-    pub rela: &'static [Rela],
+pub trait Relocatable {
+    fn base(&self) -> *const ();
+    fn symbol(&self, symbol_index: usize) -> Symbol;
+    fn relocation_slices(&self) -> RelocationSlices;
+}
+
+#[derive(Clone, Copy)]
+pub struct RelocationSlices {
+    pub rela_slice: &'static [Rela],
 }
 
 /// An ELF relocation entry with an addend.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct Rela {
+pub struct Rela {
     pub r_offset: usize,
     pub r_info: usize,
     pub r_addend: isize,
@@ -19,7 +24,7 @@ pub(crate) struct Rela {
 
 impl Rela {
     /// Extracts the symbol table index from the `r_info` field.
-    pub(crate) fn r_sym(&self) -> u32 {
+    pub fn r_sym(&self) -> u32 {
         #[cfg(target_pointer_width = "64")]
         {
             (self.r_info >> 32) as u32
@@ -31,7 +36,7 @@ impl Rela {
     }
 
     /// Extracts the relocation type from the `r_info` field.
-    pub(crate) fn r_type(&self) -> u32 {
+    pub fn r_type(&self) -> u32 {
         #[cfg(target_pointer_width = "64")]
         {
             (self.r_info & 0xFFFFFFFF) as u32

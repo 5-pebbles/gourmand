@@ -1,6 +1,6 @@
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct Symbol {
+pub struct Symbol {
     pub st_name: u32,
     #[cfg(target_pointer_width = "32")]
     pub st_value: usize,
@@ -15,7 +15,7 @@ pub(crate) struct Symbol {
     pub st_size: usize,
 }
 
-pub(crate) struct SymbolTable(*const Symbol);
+pub struct SymbolTable(*const Symbol);
 
 impl SymbolTable {
     pub fn new(symbol_table_pointer: *const Symbol) -> Self {

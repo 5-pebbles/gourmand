@@ -25,7 +25,7 @@ use core::{slice, str};
 /// |   32  |  None  |
 /// |   33  |  Fish  |
 /// ```
-pub(crate) struct StringTable(*const u8);
+pub struct StringTable(*const u8);
 
 impl StringTable {
     /// Creates a new `StringTable` from a `*const u8` pointer to the start of the string table.
@@ -41,7 +41,7 @@ impl StringTable {
     }
 
     /// Extracts the inner pointer to the next item consuming the `StringTable`.
-    pub(crate) fn into_inner(self) -> *const u8 {
+    pub fn into_inner(self) -> *const u8 {
         self.0
     }
 }

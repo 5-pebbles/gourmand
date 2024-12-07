@@ -1,22 +1,22 @@
 #[derive(Clone, Copy)]
-pub(crate) struct ElfHeaderTable<T: Clone + 'static> {
+pub struct ElfHeaderTable<T: Clone + 'static> {
     first: *const T,
     count: u16,
 }
 
 impl<T: Clone> ElfHeaderTable<T> {
-    pub(crate) fn new(base: usize, offset: usize, count: u16) -> Self {
+    pub fn new(base: usize, offset: usize, count: u16) -> Self {
         Self {
             first: (base + offset) as *const T,
             count,
         }
     }
 
-    pub(crate) fn get(&self, index: usize) -> Option<&'static T> {
+    pub fn get(&self, index: usize) -> Option<&'static T> {
         (index <= self.count as usize).then_some(unsafe { &*self.first.add(index) })
     }
 
-    pub(crate) fn iter(
+    pub fn iter(
         &self,
     ) -> core::iter::FromFn<impl FnMut() -> Option<&'static T> + use<'_, T>> {
         self.into_iter()

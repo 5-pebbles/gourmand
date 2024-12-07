@@ -1,26 +1,26 @@
 use core::ffi::c_void;
 
-pub(crate) const DT_NULL: usize = 0;
-pub(crate) const DT_NEEDED: usize = 1;
-pub(crate) const DT_PLTRELSZ: usize = 2;
-pub(crate) const DT_PLTGOT: usize = 3;
-pub(crate) const DT_HASH: usize = 4;
-pub(crate) const DT_STRTAB: usize = 5;
-pub(crate) const DT_SYMTAB: usize = 6;
-pub(crate) const DT_RELA: usize = 7;
-pub(crate) const DT_RELASZ: usize = 8;
-pub(crate) const DT_RELAENT: usize = 9;
-pub(crate) const DT_SYMENT: usize = 11;
-pub(crate) const DT_INIT: usize = 12;
-pub(crate) const DT_FINI: usize = 13;
-pub(crate) const DT_REL: usize = 17;
-pub(crate) const DT_TEXTREL: usize = 22;
-pub(crate) const DT_INIT_ARRAY: usize = 25;
-pub(crate) const DT_FINI_ARRAY: usize = 26;
-pub(crate) const DT_INIT_ARRAYSZ: usize = 27;
-pub(crate) const DT_FINI_ARRAYSZ: usize = 28;
-pub(crate) const DT_RELRSZ: usize = 35;
-pub(crate) const DT_RELR: usize = 36;
+pub const DT_NULL: usize = 0;
+pub const DT_NEEDED: usize = 1;
+pub const DT_PLTRELSZ: usize = 2;
+pub const DT_PLTGOT: usize = 3;
+pub const DT_HASH: usize = 4;
+pub const DT_STRTAB: usize = 5;
+pub const DT_SYMTAB: usize = 6;
+pub const DT_RELA: usize = 7;
+pub const DT_RELASZ: usize = 8;
+pub const DT_RELAENT: usize = 9;
+pub const DT_SYMENT: usize = 11;
+pub const DT_INIT: usize = 12;
+pub const DT_FINI: usize = 13;
+pub const DT_REL: usize = 17;
+pub const DT_TEXTREL: usize = 22;
+pub const DT_INIT_ARRAY: usize = 25;
+pub const DT_FINI_ARRAY: usize = 26;
+pub const DT_INIT_ARRAYSZ: usize = 27;
+pub const DT_FINI_ARRAYSZ: usize = 28;
+pub const DT_RELRSZ: usize = 35;
+pub const DT_RELR: usize = 36;
 
 /// A union resolved by the d_tag field of the parent dynamic array item.
 #[repr(C)]
@@ -33,7 +33,7 @@ pub union DynamicArrayUnion {
 /// An item in the dynamic array.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct DynamicArrayItem {
+pub struct DynamicArrayItem {
     pub d_tag: usize,
     pub d_un: DynamicArrayUnion,
 }
@@ -51,16 +51,16 @@ pub(crate) struct DynamicArrayItem {
 /// );
 /// ```
 #[derive(Clone, Copy)]
-pub(crate) struct DynamicArrayIter(*const DynamicArrayItem);
+pub struct DynamicArrayIter(*const DynamicArrayItem);
 
 impl DynamicArrayIter {
     /// Initializes a new `DynamicArrayIter` from an initial `*const DynamicArrayItem` pointer.
-    pub(crate) fn new(dynamic_array_pointer: *const DynamicArrayItem) -> Self {
+    pub fn new(dynamic_array_pointer: *const DynamicArrayItem) -> Self {
         Self(dynamic_array_pointer)
     }
 
     /// Extracts the inner pointer to the next item consuming the `DynamicArrayIter`.
-    pub(crate) fn into_inner(self) -> *const DynamicArrayItem {
+    pub fn into_inner(self) -> *const DynamicArrayItem {
         self.0
     }
 }
