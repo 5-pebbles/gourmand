@@ -2,6 +2,7 @@ use std::arch::asm;
 
 use crate::{elf::relocate::Relocatable, syscall_assert};
 
+#[inline(always)]
 pub unsafe fn relocate(object: &impl Relocatable) {
     let relocation_slices = object.relocation_slices();
     // Variables in relocation formulae:

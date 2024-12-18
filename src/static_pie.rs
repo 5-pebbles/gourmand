@@ -1,5 +1,4 @@
 use std::{
-    cmp::max,
     marker::PhantomData,
     ptr::{null, null_mut},
     slice,
@@ -20,12 +19,10 @@ use crate::{
         symbol::Symbol,
         thread_local_storage::ThreadControlBlock,
     },
+    linux::page_size,
     syscall_debug_assert,
+    utils::round_up_to_boundary,
 };
-
-fn round_up_to_boundary(address: usize, boundary: usize) -> usize {
-    (address + (boundary - 1)) & boundary.wrapping_neg()
-}
 
 pub struct Ingredients;
 pub struct Baked;
@@ -181,9 +178,8 @@ impl StaticPie<Baked> {
     #[inline(always)]
     pub unsafe fn allocate_tls_in_stomach(self) {
         // Static Thread Local Storage [before Thread Pointer]:
-        //      ┌----------------------------┐
-        //      |    TCB & TLS Alignment     |     ┌---------------------┐
-        //      |----------------------------|  <- |    tls-offset[1]    |
+        //                                         ┌---------------------┐
+        //      ┌----------------------------┐  <- |    tls-offset[1]    |
         //      |      Static TLS Block      |     |---------------------|
         //      |----------------------------|  <- | Thread Pointer (TP) |
         // ┌--- | Thread Control Block (TCB) |     └---------------------┘
@@ -192,17 +188,17 @@ impl StaticPie<Baked> {
         // |   ┌------------------┐
         // └-> | Null Dtv Pointer |
         //     └------------------┘
+        // NOTE: I am not bothering with alignment at the first address because it's already page aligned...
         let Some(tls_program_header) = self.tls_program_header else {
             return;
         };
 
-        let tcb_and_tls_align = max(tls_program_header.p_align, align_of::<ThreadControlBlock>());
         let tls_blocks_size_and_align =
             round_up_to_boundary(tls_program_header.p_memsz, tls_program_header.p_align);
         let tcb_size = size_of::<ThreadControlBlock>();
 
-        let required_size = tcb_and_tls_align + tls_blocks_size_and_align + tcb_size;
-        let tls_allocation_pointer = mmap(
+        let required_size = tls_blocks_size_and_align + tcb_size;
+        let tls_block_pointer = mmap(
             null_mut(),
             required_size,
             PROT_READ | PROT_WRITE,
@@ -210,30 +206,25 @@ impl StaticPie<Baked> {
             -1, // file descriptor (-1 for anonymous mapping)
             0,  // offset
         );
-        syscall_debug_assert!(tls_allocation_pointer.addr() % tcb_and_tls_align == 0);
-
-        let tls_block_pointer = tls_allocation_pointer.byte_add(tcb_and_tls_align);
+        syscall_debug_assert!(tls_block_pointer.addr() % page_size::get_page_size() == 0);
 
         // Initialize the TLS data from template image:
-        slice::from_raw_parts_mut(tls_block_pointer, tls_program_header.p_filesz).copy_from_slice(
-            slice::from_raw_parts(
-                self.base_address.byte_add(tls_program_header.p_offset) as *const u8,
+        slice::from_raw_parts_mut(tls_block_pointer as *mut u8, tls_program_header.p_filesz)
+            .copy_from_slice(slice::from_raw_parts(
+                self.base_address.byte_add(tls_program_header.p_offset) as *mut u8,
                 tls_program_header.p_filesz,
-            ),
-        );
+            ));
 
         // Zero out TLS data beyond `p_filesz`:
         slice::from_raw_parts_mut(
-            tls_block_pointer.byte_add(tls_program_header.p_filesz),
+            tls_block_pointer.byte_add(tls_program_header.p_filesz) as *mut u8,
             tls_program_header.p_memsz - tls_program_header.p_filesz,
         )
         .fill(0);
 
         // Initialize the Thread Control Block (TCB):
-        let thread_control_block = tls_allocation_pointer
-            .byte_add(tcb_and_tls_align)
-            .byte_add(tls_blocks_size_and_align)
-            as *mut ThreadControlBlock;
+        let thread_control_block =
+            tls_block_pointer.byte_add(tls_blocks_size_and_align) as *mut ThreadControlBlock;
 
         let thread_pointer_register: *mut () =
             (*thread_control_block).thread_pointee.as_mut_ptr().cast();

@@ -17,10 +17,13 @@ mod arch;
 
 mod cli;
 mod elf;
+mod error;
 mod io_macros;
 mod linux;
 mod shared_object;
 mod static_pie;
+mod thread_local_storage;
+mod utils;
 
 use elf::program_header::ProgramHeader;
 use io_macros::*;
@@ -36,7 +39,7 @@ use shared_object::SharedObject;
 use static_pie::StaticPie;
 
 // This is where the magic happens, it's called by the architecture specific _start and returns the entry address when everything is set up:
-pub unsafe fn rust_main(stack_pointer: *mut usize) -> usize {
+pub unsafe extern "C" fn rust_main(stack_pointer: *mut usize) -> usize {
     // Check that `stack_pointer` is where we expect it to be.
     syscall_debug_assert!(stack_pointer != core::ptr::null_mut());
     syscall_debug_assert!(stack_pointer.addr() & 0b1111 == 0);
@@ -91,8 +94,6 @@ pub unsafe fn rust_main(stack_pointer: *mut usize) -> usize {
     }
 
     let shared_object = SharedObject::from_headers(&program_header_table, pseudorandom_bytes);
-
-    
 
     // let linked_shared_objects: HashMap<&'static str, SharedObject> = HashMap::new();
     // for library in shared_object.libraries() {

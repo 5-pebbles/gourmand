@@ -19,13 +19,13 @@ pub const MAP_ANONYMOUS: usize = 0x20;
 
 // #[inline(always)]
 pub unsafe fn mmap(
-    pointer: *mut u8,
+    pointer: *mut (),
     size: usize,
     protection_flags: usize,
     map_flags: usize,
     file_descriptor: isize,
     offset: usize,
-) -> *mut u8 {
+) -> *mut () {
     const MMAP: usize = 9; // I am like 80% sure this is the right system call... :)
 
     let mut result: isize;
@@ -45,11 +45,11 @@ pub unsafe fn mmap(
         );
     }
     syscall_debug_assert!(result >= 0);
-    result as *mut u8
+    result as *mut ()
 }
 
 #[inline(always)]
-pub unsafe fn munmap(pointer: *mut u8, size: usize) {
+pub unsafe fn munmap(pointer: *mut (), size: usize) {
     const MUNMAP: usize = 11;
 
     let mut result: isize;
